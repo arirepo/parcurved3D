@@ -92,6 +92,7 @@ contains
 end module curved_tet
 
 program tester
+  use tetmesher
   use curved_tet
   implicit none
 
@@ -99,6 +100,17 @@ program tester
   integer :: d, i
   real*8, dimension(:), allocatable :: r, s, t, x, y, z
   real*8, dimension(3) :: xA
+
+  ! tetmeshing vars
+  integer :: npts, nquad, ntri, nhole
+  real*8, dimension(:), allocatable :: xx, xh 
+  integer, dimension(:), allocatable :: icontag
+  ! outs
+  real*8, dimension(:,:), allocatable :: xf, uu
+  integer, dimension(:,:), allocatable :: tetcon, neigh
+  integer :: nbntri
+  integer, dimension(:), allocatable :: bntri
+
 
   ! generate the lagrangian tet. interpolation points
   d = 8
@@ -116,6 +128,29 @@ program tester
   print *, 'x = ', x
   print *, 'y = ', y
   print *, 'z = ', z
+
+  ! generate tetmesh for visualization
+  npts = size(r)
+  allocate(xx(3 * npts))
+  do i = 1, npts
+     xx(3*(i-1) + 1) = x(i)
+     xx(3*(i-1) + 2) = y(i)
+     xx(3*(i-1) + 3) = z(i)
+  end do
+  nquad = 0
+  ntri = 0
+  allocate(icontag(0))
+  nhole = 0
+  allocate(xh(nhole))
+  ! 
+  call tetmesh('nn', npts, xx, nquad, ntri, icontag, nhole, xh &
+       , xf, tetcon, neigh, nbntri, bntri)
+
+  ! write to tecplot
+  allocate(uu(1, npts))
+  uu = 1.0d0
+  call write_u_tecplot_tet(meshnum=1, outfile='cur.tec' &
+       , x = xf, icon = tetcon, u = uu, appendit = .false.)
 
   ! done here
 end program tester
