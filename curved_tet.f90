@@ -1,6 +1,7 @@
 module curved_tet
   use tetmesher
   use tet_props
+  use lag_basis
   implicit none
 
   private
@@ -63,15 +64,21 @@ contains
     ! done here
   end subroutine Suv
 
-  subroutine master2curved_tet(r,s,t, xA, x, y, z)
+  subroutine master2curved_tet(r,s,t, uv, xA, x, y, z)
     implicit none
     real*8, intent(in) :: r, s, t
+    real*8, dimension(:, :), intent(in) :: uv
     real*8, dimension(:), intent(in) :: xA
     real*8, intent(out) :: x, y, z
 
     ! local vars
+    integer :: ii
     real*8 :: u, v, alpha
     real*8, dimension(3) :: Sf, xf
+    !
+    real*8 :: val   ! the value of basis  
+    real*8, dimension(2) :: der, uv_fin 
+
 
     if ( abs(t - 1.0d0) <= 1.0d-15 ) then
        u = r ! simple
@@ -82,7 +89,15 @@ contains
     end if
     alpha = t
 
-    call Suv(u, v, Sf)
+    ! compute final uv
+    uv_fin = 0.0d0
+    do ii = 1, 3
+       call psi(etype = 1, i = ii, r = u, s = v, val = val, der = der)
+       uv_fin = uv_fin + val * uv(:, ii)
+    end do
+
+    ! compute surface points
+    call Suv(u = uv_fin(1), v= uv_fin(2), S = Sf)
 
     xf = alpha * xA + (1.0d0 - alpha) * Sf
 
@@ -216,7 +231,7 @@ program tester
   integer :: d, i
   real*8, dimension(:), allocatable :: r, s, t, x, y, z
   real*8, dimension(3) :: xA
-
+  real*8, dimension(2, 3) :: uv
 
   ! generate the lagrangian tet. interpolation points
   d = 8
@@ -224,14 +239,36 @@ program tester
   allocate(x(size(r)), y(size(r)), z(size(r))) 
 
   ! element 1
-  xA = (/ .5d0, .6d0, 2.2d0 /)
+  xA = (/ .2d0, .2d0, 2.2d0 /)
+  uv = reshape( (/ 0.0d0, 0.0d0, .5d0, 0.0d0 &
+       , 0.0d0, 0.5d0 /), (/2, 3/) )
+
   do i = 1, size(r)
-     call master2curved_tet(r(i),s(i),t(i), xA, x(i), y(i), z(i))
+     call master2curved_tet( r = r(i), s = s(i), t = t(i), uv = uv &
+          , xA = xA, x = x(i), y = y(i), z = z(i) )
+
+     ! call master2curved_tet(r(i),s(i),t(i), xA, x(i), y(i), z(i))
   end do
 
   ! export the generated curved element
   call export_tet_face_curve(x = x, y=y, z=z, mina = 20.0d0 &
        , maxa = 155.0d0, fname = 'curved.tec', meshnum = 1, append_it = .false.)  
+
+  ! element 2
+  xA = (/ .2d0, .2d0, 2.2d0 /)
+  uv = reshape( (/ 0.5d0, 0.0d0, 0.5d0, 0.5d0 &
+       , 0.0d0, 0.5d0 /), (/2, 3/) )
+
+  do i = 1, size(r)
+     call master2curved_tet( r = r(i), s = s(i), t = t(i), uv = uv &
+          , xA = xA, x = x(i), y = y(i), z = z(i) )
+
+     ! call master2curved_tet(r(i),s(i),t(i), xA, x(i), y(i), z(i))
+  end do
+
+  ! export the generated curved element
+  call export_tet_face_curve(x = x, y=y, z=z, mina = 20.0d0 &
+       , maxa = 155.0d0, fname = 'curved.tec', meshnum = 2, append_it = .true.)  
 
   ! clean ups
   if ( allocated(r) ) deallocate(r)
