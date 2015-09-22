@@ -29,8 +29,8 @@ LFLAGS = -ltet  -lstdc++
 # LFLAGS = -ltet
 TETGEN_LIB = $(LIBS)libtet.a
 
-curved.run: $(TETGEN_LIB) tetgen_wrapper.o tetmesher.o curved_tet.o
-	$(F90) $(FCLFLAGS) -I$(INCS) -L$(LIBS) tetgen_wrapper.o tetmesher.o curved_tet.f90 $(LFLAGS)
+curved.run: $(TETGEN_LIB) tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.o
+	$(F90) $(FCLFLAGS) -I$(INCS) -L$(LIBS) tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.f90 $(LFLAGS)
 
 clean:
 	rm -f *.o *.mod *.out *~ dumped*

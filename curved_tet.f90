@@ -94,6 +94,7 @@ end module curved_tet
 program tester
   use tetmesher
   use curved_tet
+  use tet_props
   implicit none
 
   ! local vars
@@ -110,7 +111,8 @@ program tester
   integer, dimension(:,:), allocatable :: tetcon, neigh
   integer :: nbntri
   integer, dimension(:), allocatable :: bntri
-
+  ! filter
+  logical, dimension(:), allocatable :: is_active
 
   ! generate the lagrangian tet. interpolation points
   d = 8
@@ -119,15 +121,15 @@ program tester
   allocate(x(size(r)), y(size(r)), z(size(r))) 
 
   ! map
-  xA = (/ .5d0, .5d0, 3.0d0 /)
+  xA = (/ .9d0, .9d0, 2.5d0 /)
   do i = 1, size(r)
      call master2curved_tet(r(i),s(i),t(i), xA, x(i), y(i), z(i))
   end do
 
-  ! show mapped points
-  print *, 'x = ', x
-  print *, 'y = ', y
-  print *, 'z = ', z
+  ! ! show mapped points
+  ! print *, 'x = ', x
+  ! print *, 'y = ', y
+  ! print *, 'z = ', z
 
   ! generate tetmesh for visualization
   npts = size(r)
@@ -146,11 +148,59 @@ program tester
   call tetmesh('nn', npts, xx, nquad, ntri, icontag, nhole, xh &
        , xf, tetcon, neigh, nbntri, bntri)
 
+  ! filter
+  allocate(is_active(size(tetcon, 1)))
+  call filter_bad_tets(x = xf, icon = tetcon, mina = 30.0d0 &
+       , maxa= 160.0d0, active = is_active)
+
   ! write to tecplot
+  print *, 'writing to Tecplot ...'
   allocate(uu(1, npts))
   uu = 1.0d0
   call write_u_tecplot_tet(meshnum=1, outfile='cur.tec' &
-       , x = xf, icon = tetcon, u = uu, appendit = .false.)
+       , x = xf, icon = tetcon, u = uu, appendit = .false., is_active = is_active)
 
+  print *, 'done!'
   ! done here
+
+contains
+
+  ! filter bad tetrahedrons
+  subroutine filter_bad_tets(x, icon, mina, maxa, active)
+    implicit none
+    real*8, dimension(:, :), intent(in) :: x
+    integer, dimension(:, :), intent(in) :: icon
+    real*8, intent(in) :: mina, maxa
+    logical, dimension(:), intent(out) :: active
+
+    ! local vars
+    integer :: i, j, pt
+    real*8 :: xtet(3, 4), ang(6), min_ang, max_ang
+    real*8, parameter :: r8_pi = 3.141592653589793D+00
+
+    do i = 1, size(icon, 1) ! loop over tets
+
+       ! fill this tet coords
+       do j = 1, 4
+          pt = icon(i, j)
+          xtet(:, j) = x(:, pt)
+       end do
+       ! compute measure
+       call tetrahedron_dihedral_angles ( tetra = xtet, angle = ang )
+       !
+       min_ang = minval(abs(ang)) * 180.0d0 / r8_pi
+       max_ang = maxval(abs(ang)) * 180.0d0 / r8_pi
+
+       ! decide which one to hide
+       if ( (min_ang >= mina) .and. (max_ang <= maxa) ) then
+          active(i) = .true.
+       else
+          active(i) = .false.
+       end if
+
+    end do
+
+    ! done here
+  end subroutine filter_bad_tets
+
 end program tester

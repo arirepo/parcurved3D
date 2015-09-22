@@ -298,7 +298,7 @@ contains
   !
   ! u(neqs, nnodes)
   !
-  subroutine write_u_tecplot_tet(meshnum, outfile, x, icon, u, appendit)
+  subroutine write_u_tecplot_tet(meshnum, outfile, x, icon, u, appendit, is_active)
     implicit none
     integer, intent(in) :: meshnum
     character(len=*), intent(in) :: outfile
@@ -306,6 +306,7 @@ contains
     integer, dimension(:, :), intent(in) :: icon
     real*8, dimension(:,:), intent(in) :: u
     logical, optional :: appendit
+    logical, optional :: is_active(:)
 
     ! local vars
     integer :: i, j, k, neqs, nnodes, nelem
@@ -313,10 +314,15 @@ contains
     ! init
     neqs = size(u,1)
     nnodes = size(u,2)
-    nelem = size(icon, 1) 
     if ( nnodes .ne. size(x,2) ) then
        print *, 'nnodes .ne. size(x,2)! something is wrong in writing tetmesh! stop'
        stop
+    end if
+
+    if ( .not. present(is_active) ) then
+       nelem = size(icon, 1)
+    else
+       nelem = count(is_active)
     end if
 
     ! opening for rewrite
@@ -363,10 +369,19 @@ contains
     write(10, *)
 
     ! write connectivity
-    do k = 1, nelem
-       write(10, *) ' ',  icon(k,1) &
-            , ' ',  icon(k,2), ' ',  icon(k,3) &
-            , ' ',  icon(k,4)
+    do k = 1, size(icon, 1)
+       if ( present(is_active) ) then
+          if ( is_active(k) ) then
+             write(10, *) ' ',  icon(k,1) &
+                  , ' ',  icon(k,2), ' ',  icon(k,3) &
+                  , ' ',  icon(k,4)
+          else
+          end if
+       else
+          write(10, *) ' ',  icon(k,1) &
+               , ' ',  icon(k,2), ' ',  icon(k,3) &
+               , ' ',  icon(k,4)
+       end if
     end do
 
     ! close the output file
