@@ -1,4 +1,6 @@
 module curved_tet
+  use tetmesher
+  use tet_props
   implicit none
 
   private
@@ -6,6 +8,8 @@ module curved_tet
   real*8, parameter :: Radius = 2.0d0
 
   public :: coord_tet, master2curved_tet
+  public :: export_tet_face_curve
+
 
 contains
 
@@ -89,81 +93,80 @@ contains
     ! done here
   end subroutine master2curved_tet
 
-end module curved_tet
+  ! Performs subtetraheralization of a
+  ! general curved tet and filter
+  ! tets that have dihedral angle not in range
+  ! [mina, maxa] and then finally, write 
+  ! the result to tecplot file named fname. 
+  ! Has the option to append to the previous export.
+  !
+  subroutine export_tet_face_curve(x, y, z, mina, maxa, fname, meshnum, append_it)
+    implicit none
+    real*8, dimension(:), intent(in) :: x, y, z
+    real*8, intent(in) :: mina, maxa
+    character(len = *), intent(in) :: fname
+    integer, intent(in) :: meshnum
+    logical , intent(in) :: append_it
 
-program tester
-  use tetmesher
-  use curved_tet
-  use tet_props
-  implicit none
+    ! local vars
+    integer :: i
+    ! tetmeshing vars
+    integer :: npts, nquad, ntri, nhole
+    real*8, dimension(:), allocatable :: xx, xh 
+    integer, dimension(:), allocatable :: icontag
+    ! outs
+    real*8, dimension(:,:), allocatable :: xf, uu
+    integer, dimension(:,:), allocatable :: tetcon, neigh
+    integer :: nbntri
+    integer, dimension(:), allocatable :: bntri
+    ! filter
+    logical, dimension(:), allocatable :: is_active
 
-  ! local vars
-  integer :: d, i
-  real*8, dimension(:), allocatable :: r, s, t, x, y, z
-  real*8, dimension(3) :: xA
+    ! generate tetmesh for visualization
+    npts = size(x)
+    allocate(xx(3 * npts))
+    do i = 1, npts
+       xx(3*(i-1) + 1) = x(i)
+       xx(3*(i-1) + 2) = y(i)
+       xx(3*(i-1) + 3) = z(i)
+    end do
+    nquad = 0
+    ntri = 0
+    allocate(icontag(0))
+    nhole = 0
+    allocate(xh(nhole))
+    ! 
+    call tetmesh('nn', npts, xx, nquad, ntri, icontag, nhole, xh &
+         , xf, tetcon, neigh, nbntri, bntri)
 
-  ! tetmeshing vars
-  integer :: npts, nquad, ntri, nhole
-  real*8, dimension(:), allocatable :: xx, xh 
-  integer, dimension(:), allocatable :: icontag
-  ! outs
-  real*8, dimension(:,:), allocatable :: xf, uu
-  integer, dimension(:,:), allocatable :: tetcon, neigh
-  integer :: nbntri
-  integer, dimension(:), allocatable :: bntri
-  ! filter
-  logical, dimension(:), allocatable :: is_active
+    ! filter
+    allocate(is_active(size(tetcon, 1)))
+    call filter_bad_tets(x = xf, icon = tetcon, mina = mina &
+         , maxa= maxa, active = is_active)
 
-  ! generate the lagrangian tet. interpolation points
-  d = 8
-  call coord_tet(d, r, s, t)
+    ! write to tecplot
+    print *, 'writing to Tecplot ...'
+    allocate(uu(1, npts))
+    uu = 1.0d0
+    call write_u_tecplot_tet(meshnum=meshnum, outfile=fname &
+         , x = xf, icon = tetcon, u = uu &
+         , appendit = append_it, is_active = is_active)
 
-  allocate(x(size(r)), y(size(r)), z(size(r))) 
+    print *, 'done writing to Tecplot!'
 
-  ! map
-  xA = (/ .9d0, .9d0, 2.5d0 /)
-  do i = 1, size(r)
-     call master2curved_tet(r(i),s(i),t(i), xA, x(i), y(i), z(i))
-  end do
+    ! clean ups
+    if ( allocated(xx) ) deallocate(xx)
+    if ( allocated(xh) ) deallocate(xh)
+    if ( allocated(icontag)) deallocate(icontag)
+    if ( allocated(xf) ) deallocate(xf)
+    if ( allocated(uu) ) deallocate(uu)
+    if ( allocated(tetcon) ) deallocate(tetcon)
+    if ( allocated(neigh) ) deallocate(neigh)
+    if ( allocated(bntri) ) deallocate(bntri)
+    if ( allocated(is_active) ) deallocate(is_active)
 
-  ! ! show mapped points
-  ! print *, 'x = ', x
-  ! print *, 'y = ', y
-  ! print *, 'z = ', z
-
-  ! generate tetmesh for visualization
-  npts = size(r)
-  allocate(xx(3 * npts))
-  do i = 1, npts
-     xx(3*(i-1) + 1) = x(i)
-     xx(3*(i-1) + 2) = y(i)
-     xx(3*(i-1) + 3) = z(i)
-  end do
-  nquad = 0
-  ntri = 0
-  allocate(icontag(0))
-  nhole = 0
-  allocate(xh(nhole))
-  ! 
-  call tetmesh('nn', npts, xx, nquad, ntri, icontag, nhole, xh &
-       , xf, tetcon, neigh, nbntri, bntri)
-
-  ! filter
-  allocate(is_active(size(tetcon, 1)))
-  call filter_bad_tets(x = xf, icon = tetcon, mina = 30.0d0 &
-       , maxa= 160.0d0, active = is_active)
-
-  ! write to tecplot
-  print *, 'writing to Tecplot ...'
-  allocate(uu(1, npts))
-  uu = 1.0d0
-  call write_u_tecplot_tet(meshnum=1, outfile='cur.tec' &
-       , x = xf, icon = tetcon, u = uu, appendit = .false., is_active = is_active)
-
-  print *, 'done!'
-  ! done here
-
-contains
+    ! done here
+  end subroutine export_tet_face_curve
 
   ! filter bad tetrahedrons
   subroutine filter_bad_tets(x, icon, mina, maxa, active)
@@ -203,4 +206,40 @@ contains
     ! done here
   end subroutine filter_bad_tets
 
+end module curved_tet
+
+program tester
+  use curved_tet
+  implicit none
+
+  ! local vars
+  integer :: d, i
+  real*8, dimension(:), allocatable :: r, s, t, x, y, z
+  real*8, dimension(3) :: xA
+
+
+  ! generate the lagrangian tet. interpolation points
+  d = 8
+  call coord_tet(d, r, s, t)
+  allocate(x(size(r)), y(size(r)), z(size(r))) 
+
+  ! element 1
+  xA = (/ .5d0, .6d0, 2.2d0 /)
+  do i = 1, size(r)
+     call master2curved_tet(r(i),s(i),t(i), xA, x(i), y(i), z(i))
+  end do
+
+  ! export the generated curved element
+  call export_tet_face_curve(x = x, y=y, z=z, mina = 20.0d0 &
+       , maxa = 155.0d0, fname = 'curved.tec', meshnum = 1, append_it = .false.)  
+
+  ! clean ups
+  if ( allocated(r) ) deallocate(r)
+  if ( allocated(s) ) deallocate(s)
+  if ( allocated(t) ) deallocate(t)
+  if ( allocated(x) ) deallocate(x)
+  if ( allocated(y) ) deallocate(y)
+  if ( allocated(z) ) deallocate(z)
+
+  ! done here
 end program tester
