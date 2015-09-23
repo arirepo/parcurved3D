@@ -33,7 +33,7 @@ curved.run: $(TETGEN_LIB) lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o c
 	$(F90) $(FCLFLAGS) -I$(INCS) -L$(LIBS) lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.f90 $(LFLAGS)
 
 clean:
-	rm -f *.o *.mod *.out *~ dumped*
+	rm -f *.o *.mod *.out *~ dumped* *.tec $(LIBS)libtet.a 
 
 $(TETGEN_LIB):
 	(cd ./tetgen/; $(MAKE) tetlib )
