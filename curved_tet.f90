@@ -198,7 +198,7 @@ contains
     allocate(xh(nhole))
     ! 
     call tetmesh('nn', npts, xx, nquad, ntri, icontag, nhole, xh &
-         , xf, tetcon, neigh, nbntri, bntri)
+         , xf, tetcon, neigh, nbntri, bntri, 0)
 
     ! filter
     allocate(is_active(size(tetcon, 1)))

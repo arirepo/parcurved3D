@@ -9,7 +9,7 @@ module tetmesher
   interface
      subroutine tetmesh_intf(command, npts, x, nquad &
           , ntri, icontag, nhole, xh, nptsf, xf, ntet &
-          , tetcon, neigh, nbntri, bntri) bind( C, name = "main_tetgen_wrapper")
+          , tetcon, neigh, nbntri, bntri, have_bn_marker) bind( C, name = "main_tetgen_wrapper")
        use iso_c_binding, only : c_int, c_char, c_double
        import
        implicit none
@@ -29,6 +29,7 @@ module tetmesher
        integer (c_int) :: tetcon(4 * max_tet), neigh(4 * max_tet)
        integer(c_int) :: nbntri
        integer(c_int) :: bntri(6 * max_triface)
+       integer(c_int), value :: have_bn_marker
 
      end subroutine tetmesh_intf
 
@@ -195,7 +196,7 @@ contains
   ! generic tetmesher subroutine
   !
   subroutine tetmesh(cmd, npts, x, nquad, ntri, icontag, nhole, xh &
-       , xf, tetcon, neigh, nbntri, bntri)
+       , xf, tetcon, neigh, nbntri, bntri, bn_marker)
     use iso_c_binding, only : c_int, c_char, c_double, c_null_char
     implicit none
     character(len = *), intent(in) :: cmd
@@ -207,6 +208,7 @@ contains
     integer, dimension(:,:), allocatable :: tetcon, neigh
     integer, intent(out) :: nbntri
     integer, dimension(:), allocatable :: bntri
+    integer, intent(in), optional :: bn_marker
 
 
     ! local vars
@@ -225,6 +227,7 @@ contains
     integer (c_int), allocatable :: tetcon_out(:), neigh_out(:)
     integer(c_int) :: nbntri_out
     integer(c_int), allocatable :: bntri_out(:)
+    integer :: have_bn_marker
  
     ! assign and init
     cmd_in = cmd//C_NULL_CHAR 
@@ -252,10 +255,16 @@ contains
          , neigh_out(4*max_tet), bntri_out(6*max_triface))
 
     ! call CPP function
+    if ( present(bn_marker) ) then 
+       have_bn_marker = bn_marker
+    else
+       have_bn_marker = 1 ! default
+    end if
     call tetmesh_intf(command = cmd_in, npts = npts_in, x = x_in, nquad = nquad_in &
          , ntri = ntri_in, icontag = icontag_in, nhole = nhole_in &
          , xh = xh_in, nptsf = nptsf_out, xf = xf_out, ntet = ntet_out &
-          , tetcon = tetcon_out, neigh = neigh_out, nbntri = nbntri_out, bntri = bntri_out)
+         , tetcon = tetcon_out, neigh = neigh_out, nbntri = nbntri_out &
+         , bntri = bntri_out, have_bn_marker = have_bn_marker)
 
     ! set up return values
     !

@@ -4,7 +4,7 @@ extern "C" int main_tetgen_wrapper(char *command, int npts, double *x, int nquad
 			, int ntri, int *icontag, int nhole, double *xh
 
 				   , int *nptsf, double *xf, int *ntet
-				   , int *tetcon, int *neigh, int *nbntri, int *bntri) 
+				   , int *tetcon, int *neigh, int *nbntri, int *bntri, int have_bn_marker) 
 {
 
   //local vars
@@ -183,12 +183,15 @@ extern "C" int main_tetgen_wrapper(char *command, int npts, double *x, int nquad
       // vertices
       for (int j =0; j < 3; j++)
 	bntri[6*i+j] = out.trifacelist[3*i+j];
-      // // face marker
-      // for (int j =3; j < 4; j++)
-      // 	bntri[6*i+j] = out.trifacemarkerlist[i];
-      // // adjacent tets 1, 2
-      // for (int j =4; j < 6; j++)
-      // 	bntri[6*i+j] = out.adjtetlist[2*i+j-4];
+      if ( have_bn_marker != 0)
+	{
+	  // face marker
+	  for (int j =3; j < 4; j++)
+	    bntri[6*i+j] = out.trifacemarkerlist[i];
+	  // adjacent tets 1, 2
+	  for (int j =4; j < 6; j++)
+	    bntri[6*i+j] = out.adjtetlist[2*i+j-4];
+	}
     }
 
 
