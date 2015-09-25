@@ -33,7 +33,7 @@ LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/in
 INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/inc/
 
 curved.run: $(TETGEN_LIB) ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.o
-	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.f90 $(LFLAGS)
+	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.f90 $(LFLAGS)
 
 clean:
 	rm -f *.o *.mod *.out *~ dumped* *.tec $(LIBS)libtet.a 

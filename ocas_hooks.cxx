@@ -152,10 +152,11 @@ extern "C" int find_pts_on_database(int npts, double *pts
   gp_Pnt2d pt_uv;
   double dist;
   int ii;
-  anExp_static.ReInit();
 
   for (int indx = 0; indx < npts; indx++)
     {
+      // HARD Reset!
+      anExp_static.ReInit();
 
       // take one point from input array
       pt_samp.SetX(pts[indx*3]);

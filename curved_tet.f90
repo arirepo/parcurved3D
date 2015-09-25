@@ -2,6 +2,7 @@ module curved_tet
   use tetmesher
   use tet_props
   use lag_basis
+  use op_cascade
   implicit none
 
   private
@@ -354,11 +355,12 @@ contains
   end subroutine tester1
 
   ! 
-  subroutine curved_tetgen_geom(tetgen_cmd, facet_file, cad_file, nhole, xh)
+  subroutine curved_tetgen_geom(tetgen_cmd, facet_file, cad_file, nhole, xh, tol)
     implicit none
     character(len = *), intent(in) :: tetgen_cmd, facet_file, cad_file
     integer, intent(in) :: nhole
     real*8, dimension(:), intent(in) :: xh
+    real*8, intent(in) :: tol
 
     ! local vars
     integer :: npts, nquad, ntri
@@ -372,6 +374,12 @@ contains
     integer, dimension(:), allocatable :: bntri
 
     real*8, allocatable :: uu(:, :)
+
+    ! CAD corresponding data struct
+    integer, allocatable :: cent_cad_found(:) !nbntri
+    real*8, allocatable :: xc(:), uvc(:)
+    integer :: tpt, ii, jj, kk
+    real*8 :: tuv(2), txyz(3), xbn(3,3)
 
     ! read the facet file
     print *, 'starting curved tetrahedral mesh generator'
@@ -394,11 +402,63 @@ contains
          , icon = tetcon, u = uu, appendit = .false.)
     if ( allocated(uu) ) deallocate(uu)
 
+    ! init CAD file
+    call init_IGES_f90(fname = cad_file)
+
     ! find the CAD tag of the centroid of bn faces (tris)
+    allocate(cent_cad_found(nbntri))
+    cent_cad_found = 0
+    allocate(xc(3*nbntri))
+    xc = 0.0d0
+    allocate(uvc(2*nbntri))
+    uvc = 0.0d0
+
+    do ii = 1, nbntri
+       do jj = 1, 3
+          tpt = bntri(6*(ii-1) + jj)
+          do kk = 1, 3
+             xc(3*(ii-1) + kk) = xc(3*(ii-1) + kk) + xf(kk, tpt)
+          end do
+       end do
+    end do
+
+    ! finalize the center coord
+    xc = xc / 3.0d0 
+    ! find the CAD tag of the centroids
+    call find_pts_on_database_f90(npts = nbntri, pts = xc &
+         , found = cent_cad_found, uv = uvc, tol = tol)
+
+    print *, 'cent_cad_found = ', cent_cad_found
+
+    print *, 'compute and show physical center of bn tris'
+    do ii = 1, nbntri
+       tuv(1) = uvc(2*(ii-1) + 1)
+       tuv(2) = uvc(2*(ii-1) + 2)
+       if (cent_cad_found(ii) .eq. -1) cycle
+       call uv2xyz_f90(CAD_face = cent_cad_found(ii), uv = tuv, xyz = txyz)
+       print *, txyz
+    end do
+
+    print *, 'print mapped bn triangles'
+    do ii = 1, nbntri
+       if (cent_cad_found(ii) .eq. -1) cycle
+       do jj = 1, 3
+          tpt = bntri(6*(ii-1) + jj)
+          xbn(:, jj) = xf(:, tpt)
+       end do
+       print*, xbn(:, 1)
+       print*, xbn(:, 2)
+       print*, xbn(:, 3)
+       print*, xbn(:, 1) 
+       print*, ' '
+    end do
 
     ! map one face curved tets
 
     ! map one edge curved tets
+
+    ! close CAD objects
+    call clean_statics_f90()
 
     ! clean ups
     if ( allocated(x) ) deallocate(x)
@@ -407,6 +467,7 @@ contains
     if ( allocated(tetcon) ) deallocate(tetcon)
     if ( allocated(neigh) ) deallocate(neigh)
     if ( allocated(bntri) ) deallocate(bntri)
+    if ( allocated(cent_cad_found) ) deallocate(cent_cad_found)
 
     ! done here
   end subroutine curved_tetgen_geom
@@ -430,7 +491,7 @@ program tester
 
   call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
        , facet_file = 'missile_spect3.facet' &
-       , cad_file = 'store.iges', nhole = nhole, xh = xh)
+       , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .003d0)
 
   ! done here
 end program tester
