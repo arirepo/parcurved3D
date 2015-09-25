@@ -10,6 +10,7 @@ module curved_tet
 
   public :: coord_tet, master2curved_tet
   public :: export_tet_face_curve, master2curved_edg_tet
+  public :: curved_tetgen_geom
 
   ! testers
   public :: tester1
@@ -352,14 +353,78 @@ contains
     ! done here
   end subroutine tester1
 
+  ! 
+  subroutine curved_tetgen_geom(tetgen_cmd, facet_file, cad_file, nhole, xh)
+    implicit none
+    character(len = *), intent(in) :: tetgen_cmd, facet_file, cad_file
+    integer, intent(in) :: nhole
+    real*8, dimension(:), intent(in) :: xh
+
+    ! local vars
+    integer :: npts, nquad, ntri
+    real*8, dimension(:), allocatable :: x
+    integer, dimension(:), allocatable :: icontag
+
+    ! outs
+    real*8, dimension(:, :), allocatable :: xf
+    integer, dimension(:, :), allocatable :: tetcon, neigh
+    integer :: nbntri
+    integer, dimension(:), allocatable :: bntri
+
+    real*8, allocatable :: uu(:, :)
+
+    ! read the facet file
+    print *, 'starting curved tetrahedral mesh generator'
+    print *, 'reading the facet file ...'
+    call read_facet_file(facet_file, npts, x, nquad, ntri, icontag)
+    print *, 'the facet file read is complete!'
+
+    ! !
+    ! ! generic tetmesher subroutine
+    ! !
+    print *, 'generating initial tetmesh of whole domain ...'
+    call tetmesh(tetgen_cmd, npts, x, nquad, ntri, icontag, nhole, xh &
+         , xf, tetcon, neigh, nbntri, bntri)
+    print *, 'initial tetmesh is done!'
+
+    ! export tetmesh
+    allocate(uu(1, size(xf,2)))
+    uu = 1.0d0
+    call write_u_tecplot_tet(meshnum=1, outfile='linear_tets.tec', x = xf &
+         , icon = tetcon, u = uu, appendit = .false.)
+    if ( allocated(uu) ) deallocate(uu)
+
+    ! clean ups
+    if ( allocated(x) ) deallocate(x)
+    if ( allocated(icontag) ) deallocate(icontag)
+    if ( allocated(xf) ) deallocate(xf)
+    if ( allocated(tetcon) ) deallocate(tetcon)
+    if ( allocated(neigh) ) deallocate(neigh)
+    if ( allocated(bntri) ) deallocate(bntri)
+
+    ! done here
+  end subroutine curved_tetgen_geom
+
 end module curved_tet
 
 program tester
   use curved_tet
   implicit none
 
-  ! 
+  ! local vars
+  integer :: nhole
+  real*8, allocatable :: xh(:)
+
+  !
   call tester1()
+
+  nhole = 1
+  allocate(xh(3))
+  xh = (/ 0.5714d0, 0.4333d0, 0.1180d0 /)
+
+  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+       , facet_file = 'missile_spect3.facet' &
+       , cad_file = 'store.iges', nhole = nhole, xh = xh)
 
   ! done here
 end program tester
