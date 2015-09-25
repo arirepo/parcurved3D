@@ -387,12 +387,18 @@ contains
          , xf, tetcon, neigh, nbntri, bntri)
     print *, 'initial tetmesh is done!'
 
-    ! export tetmesh
+    ! export linear tetmesh
     allocate(uu(1, size(xf,2)))
     uu = 1.0d0
     call write_u_tecplot_tet(meshnum=1, outfile='linear_tets.tec', x = xf &
          , icon = tetcon, u = uu, appendit = .false.)
     if ( allocated(uu) ) deallocate(uu)
+
+    ! find the CAD tag of the centroid of bn faces (tris)
+
+    ! map one face curved tets
+
+    ! map one edge curved tets
 
     ! clean ups
     if ( allocated(x) ) deallocate(x)

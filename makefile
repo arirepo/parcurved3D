@@ -11,7 +11,7 @@
 %.o: %.f90
 	$(F90) $(F90_CFLAGS) $^ -o $@
 %.o: %.cxx
-	$(CPPC) $(CPPC_CFLAGS) -I$(INCS) $^ -o $@  
+	$(CPPC) $(CPPC_CFLAGS) -I$(INCS) -I$(INCS2) $^ -o $@  
 
 # COMPILER_PATH = /opt/gcc/bin/
 COMPILER_PATH =
@@ -25,12 +25,15 @@ CPPC_CFLAGS = -c -DTETLIBRARY
 LIBS =  ./tetgen/
 INCS =  $(LIBS)
 FCLFLAGS = 
-LFLAGS = -ltet  -lstdc++
+LFLAGS = $(LIBS2)lib* -ltet  -lstdc++
 # LFLAGS = -ltet
 TETGEN_LIB = $(LIBS)libtet.a
 
-curved.run: $(TETGEN_LIB) lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.o
-	$(F90) $(FCLFLAGS) -I$(INCS) -L$(LIBS) lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.f90 $(LFLAGS)
+LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/lin64/gcc/lib/
+INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/inc/
+
+curved.run: $(TETGEN_LIB) ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.o
+	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o curved_tet.f90 $(LFLAGS)
 
 clean:
 	rm -f *.o *.mod *.out *~ dumped* *.tec $(LIBS)libtet.a 
