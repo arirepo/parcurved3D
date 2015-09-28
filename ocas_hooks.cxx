@@ -150,8 +150,8 @@ extern "C" int find_pts_on_database(int npts, double *pts
   // Now, Start querying ...
   gp_Pnt pt_samp, pt_samp2;
   gp_Pnt2d pt_uv;
-  double dist;
-  int ii;
+  double dist, min_dist, min_u, min_v;
+  int ii, min_ii;
 
   for (int indx = 0; indx < npts; indx++)
     {
@@ -164,6 +164,8 @@ extern "C" int find_pts_on_database(int npts, double *pts
       pt_samp.SetZ(pts[indx*3+2]);
 
       ii = 0; //Now, explore what face in database this point lies on
+      min_dist = 1.0e14;
+
       for(;(anExp_static.More() && (1));anExp_static.Next()){
 	ii = ii + 1;
 	const TopoDS_Face& anFace = TopoDS::Face(anExp_static.Current());
@@ -181,23 +183,33 @@ extern "C" int find_pts_on_database(int npts, double *pts
 		   + (pt_samp2.Y() - pt_samp.Y()) * (pt_samp2.Y() - pt_samp.Y()) 
 		   + (pt_samp2.Z() - pt_samp.Z()) * (pt_samp2.Z() - pt_samp.Z()));
 
+	// update closest point and its face tag
+	if (dist < min_dist)
+	  {
+	    min_dist = dist;
+	    min_ii = ii;
+	    min_u = pt_uv.X();
+	    min_v = pt_uv.Y();
+	  }
+
 	// std::cout << "dist = " << dist << endl;
-	if ( dist <= tol ) // found! 
-	  {
-	    found[indx]  = ii;
-	    uv[indx*2]   = pt_uv.X();
-	    uv[indx*2+1] = pt_uv.Y();
-	    // OK, since we found it then break the loop
-	    break;
-	  }
-	else //NOT found!
-	  {
-
-	    found[indx] = -1;
-
-	  }
 
       } //next face in database
+
+      if ( min_dist <= tol ) // found! 
+	{
+	  found[indx]  = min_ii;
+	  uv[indx*2]   = min_u;
+	  uv[indx*2+1] = min_v;
+	  // OK, since we found it then break the loop
+	  // break;
+	}
+      else //NOT found!
+	{
+
+	  found[indx] = -1;
+
+	}
 
 
     } //next point in the query

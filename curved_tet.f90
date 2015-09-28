@@ -428,30 +428,35 @@ contains
     call find_pts_on_database_f90(npts = nbntri, pts = xc &
          , found = cent_cad_found, uv = uvc, tol = tol)
 
-    print *, 'cent_cad_found = ', cent_cad_found
-
-    print *, 'compute and show physical center of bn tris'
+    ! print *, 'cent_cad_found = ', cent_cad_found
+    ! compute physical center of bn tris and export to MATLAB ...
+    open (unit=10, file='tmp.m', status='unknown', action='write')
+    write(10, *) 'x = ['
     do ii = 1, nbntri
        tuv(1) = uvc(2*(ii-1) + 1)
        tuv(2) = uvc(2*(ii-1) + 2)
        if (cent_cad_found(ii) .eq. -1) cycle
        call uv2xyz_f90(CAD_face = cent_cad_found(ii), uv = tuv, xyz = txyz)
-       print *, txyz
+       write(10, *) txyz, ';'
     end do
+    write(10, *) '];'
 
-    print *, 'print mapped bn triangles'
+    ! print mapped bn triangles
+    write(10, *) 'tris = ['
     do ii = 1, nbntri
        if (cent_cad_found(ii) .eq. -1) cycle
        do jj = 1, 3
           tpt = bntri(6*(ii-1) + jj)
           xbn(:, jj) = xf(:, tpt)
        end do
-       print*, xbn(:, 1)
-       print*, xbn(:, 2)
-       print*, xbn(:, 3)
-       print*, xbn(:, 1) 
-       print*, ' '
+       write(10, *) xbn(:, 1), ';'
+       write(10, *) xbn(:, 2), ';'
+       write(10, *) xbn(:, 3), ';'
+       write(10, *) xbn(:, 1), ';' 
+       ! print*, ' '
     end do
+    write(10, *) '];'
+    close(10)
 
     ! map one face curved tets
 
@@ -491,7 +496,7 @@ program tester
 
   call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
        , facet_file = 'missile_spect3.facet' &
-       , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .003d0)
+       , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0)
 
   ! done here
 end program tester

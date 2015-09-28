@@ -1,3 +1,5 @@
+figure(1);hold on;
+tmp;
 ntri = size(tris, 1)/4;
 % indx = 1;
 % for i = 1:ntri
@@ -21,7 +23,6 @@ for i = 1:ntri
 end
 
 C= zeros(size(X));
-figure
 fill3(X,Y,Z,C);
 
 axis equal
