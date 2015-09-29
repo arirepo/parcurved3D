@@ -155,6 +155,8 @@ extern "C" int find_pts_on_database(int npts, double *pts
 
   for (int indx = 0; indx < npts; indx++)
     {
+      printf("indx = %d out of %d, percent completed %3.2f \n"
+	     , indx, npts, ((float)indx/(float)npts)*100.);
       // HARD Reset!
       anExp_static.ReInit();
 
@@ -203,6 +205,7 @@ extern "C" int find_pts_on_database(int npts, double *pts
 	  uv[indx*2+1] = min_v;
 	  // OK, since we found it then break the loop
 	  // break;
+	  printf("\n foundddd! \n");
 	}
       else //NOT found!
 	{

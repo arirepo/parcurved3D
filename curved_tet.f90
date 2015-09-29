@@ -425,6 +425,7 @@ contains
     ! finalize the center coord
     xc = xc / 3.0d0 
     ! find the CAD tag of the centroids
+print *, 'find the CAD tag of the centroids'
     call find_pts_on_database_f90(npts = nbntri, pts = xc &
          , found = cent_cad_found, uv = uvc, tol = tol)
 
@@ -437,6 +438,7 @@ contains
        tuv(2) = uvc(2*(ii-1) + 2)
        if (cent_cad_found(ii) .eq. -1) cycle
        call uv2xyz_f90(CAD_face = cent_cad_found(ii), uv = tuv, xyz = txyz)
+print *, 'writing the center of bntri #', ii
        write(10, *) txyz, ';'
     end do
     write(10, *) '];'
@@ -488,15 +490,23 @@ program tester
   real*8, allocatable :: xh(:)
 
   !
-  call tester1()
+  ! call tester1()
+
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = (/ 0.5714d0, 0.4333d0, 0.1180d0 /)
+
+  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+  !      , facet_file = 'missile_spect3.facet' &
+  !      , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0)
 
   nhole = 1
   allocate(xh(3))
-  xh = (/ 0.5714d0, 0.4333d0, 0.1180d0 /)
+  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
 
   call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-       , facet_file = 'missile_spect3.facet' &
-       , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0)
+       , facet_file = 'civil3.facet' &
+       , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0)
 
   ! done here
 end program tester
