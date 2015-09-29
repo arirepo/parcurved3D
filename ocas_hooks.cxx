@@ -40,9 +40,36 @@
 #include "BRep_Tool.hxx"
 #include "ShapeAnalysis_Surface.hxx"
 #include "STEPControl_Reader.hxx"
+#include <BRepMesh_IncrementalMesh.hxx>
+#include "Poly_Triangulation.hxx"
 
+//prototypes
+int init_bn_boxs(void);
+int find_cad_faces_bounding_boxes(void);
+
+// macros
+#define MY_MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+#define MY_MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+
+//
+// Statically accessible vars and storage
+//
 TopoDS_Shape sh_static;
 TopExp_Explorer anExp_static;
+
+// The following is used to store bounding
+// box for each TopoDS face of CAD model.
+#define MAX_TOPODS_FACES 10000
+struct topods_face_bn_box 
+{
+Standard_Real xmin;
+Standard_Real xmax;
+Standard_Real ymin;
+Standard_Real ymax;
+Standard_Real zmin;
+Standard_Real zmax;
+};
+struct topods_face_bn_box bn_boxs[MAX_TOPODS_FACES];
 
 // reads STEP database and finally initializes
 // the static topological classes Shape and Explorer.
@@ -76,6 +103,8 @@ extern "C" int init_STEP(const char* fname)
   sh_static = mySTEPReader.OneShape(); 
 
   anExp_static.Init(sh_static, TopAbs_FACE);
+
+  find_cad_faces_bounding_boxes();
 
   // done here!
   return 0;
@@ -113,6 +142,8 @@ extern "C" int init_IGES(const char* fname)
   sh_static = myIgesReader.OneShape(); 
 
   anExp_static.Init(sh_static, TopAbs_FACE);
+
+  find_cad_faces_bounding_boxes();
 
   // done here!
   return 0;
@@ -250,6 +281,121 @@ extern "C" int uv2xyz(int CAD_face, double *uv, double *xyz)
   xyz[0] = pt_samp.X();
   xyz[1] = pt_samp.Y();
   xyz[2] = pt_samp.Z();
+
+  // done here!
+  return 0;
+
+}
+
+// finds the bounding box of each TopoDS_Face
+// and stores it in static array bn_boxs[]
+//  
+int find_cad_faces_bounding_boxes(void)
+{
+
+  // local vars
+  int ii, jj;
+  gp_Pnt vert[3];
+  Standard_Integer pts[3];
+
+  // this file output is only for debug
+  // and/or visualization
+  ofstream myFile;
+  printf(" writing openCASCADE incremental face mesh to opencascade_faces.m \n"); 
+  myFile.open ("opencascade_faces.m");
+  myFile << "tris = [" << endl;
+
+  // HARD Reset!
+  anExp_static.ReInit();
+
+  // init bounding boxes
+  init_bn_boxs();
+
+  // mesh the shape to get the bounds from
+  // triangulation <NOT VERY ACCURATE>
+  BRepMesh_IncrementalMesh(sh_static,100.0);
+
+  // loop over faces
+  for(;(anExp_static.More() && (1));anExp_static.Next()){
+    ii = ii + 1;
+    const TopoDS_Face& anFace = TopoDS::Face(anExp_static.Current());
+
+    // Get triangulation
+    TopLoc_Location L;
+    Handle (Poly_Triangulation) facing = BRep_Tool::Triangulation(anFace,L);
+    const Poly_Array1OfTriangle & triangles = facing->Triangles();
+    const TColgp_Array1OfPnt & nodes = facing->Nodes();
+    if (!facing.IsNull()) //if that face is triangulated
+      {
+	for ( int i=facing->NbTriangles(); i >= 1; --i )
+	  {
+	    //get one of the triangles on that face
+	    Poly_Triangle triangle = triangles(i);
+	    // get the node number of that triangle
+	    triangle.Get(pts[0], pts[1], pts[2]);
+
+	    for (jj = 0; jj < 3; jj++)
+	      {
+		vert[jj] = nodes(pts[jj]); //store vertices for visualization
+
+		//
+		// Now, update the bounding box of each face
+		//
+		// xmin
+		bn_boxs[ii].xmin = MY_MIN(bn_boxs[ii].xmin, vert[jj].X());
+		// xmax
+		bn_boxs[ii].xmax = MY_MAX(bn_boxs[ii].xmax, vert[jj].X());
+		// ymin
+		bn_boxs[ii].ymin = MY_MIN(bn_boxs[ii].ymin, vert[jj].Y());
+		// ymax
+		bn_boxs[ii].ymax = MY_MAX(bn_boxs[ii].ymax, vert[jj].Y());
+		// zmin
+		bn_boxs[ii].zmin = MY_MIN(bn_boxs[ii].zmin, vert[jj].Z());
+		// zmax
+		bn_boxs[ii].zmax = MY_MAX(bn_boxs[ii].zmax, vert[jj].Z());
+	      }
+
+	    // write face triangulation to file
+	    // three vertices
+	    for (jj = 0; jj < 3; jj++)
+	      myFile << vert[jj].X() << " " << vert[jj].Y() 
+		     << " " << vert[jj].Z() << ";" << endl;
+	    // and the last one repeated
+	    jj = 0;
+	    myFile << vert[jj].X() << " " << vert[jj].Y() 
+		   << " " << vert[jj].Z() << ";" << endl;
+
+	  }
+      }
+
+
+  }
+
+  // finalize the debug file
+  myFile << "];" << endl;
+  myFile.close();
+
+  printf(" done writing opencascade_faces.m! \n"); 
+
+  // done here!
+  return 0;
+}
+
+int init_bn_boxs(void)
+{
+
+  //local vars
+  int i;
+
+  for( i = 0; i < MAX_TOPODS_FACES; i++)
+    {
+      bn_boxs[i].xmin = 1.0e15;
+      bn_boxs[i].xmax = -1.0e15;
+      bn_boxs[i].ymin = 1.0e15;
+      bn_boxs[i].ymax = -1.0e15;
+      bn_boxs[i].zmin = 1.0e15;
+      bn_boxs[i].zmax = -1.0e15;
+    }
 
   // done here!
   return 0;
