@@ -46,6 +46,7 @@
 //prototypes
 int init_bn_boxs(void);
 int find_cad_faces_bounding_boxes(void);
+int pt_in_box(int ii, const gp_Pnt& tpt);
 
 // macros
 #define MY_MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
@@ -201,6 +202,9 @@ extern "C" int find_pts_on_database(int npts, double *pts
 
       for(;(anExp_static.More() && (1));anExp_static.Next()){
 	ii = ii + 1;
+
+	if ( !pt_in_box(ii, pt_samp) ) continue;
+
 	const TopoDS_Face& anFace = TopoDS::Face(anExp_static.Current());
 	// get face as surface
 	const Handle(Geom_Surface) &surface = BRep_Tool::Surface(anFace);
@@ -399,6 +403,26 @@ int init_bn_boxs(void)
 
   // done here!
   return 0;
+
+}
+
+// return 1 if this point "tpt" is inside
+// or on the box number ii (one-based)
+//
+int pt_in_box(int ii, const gp_Pnt& tpt)
+{
+
+  if ( (tpt.X() >= bn_boxs[ii].xmin) && 
+       (tpt.X() <= bn_boxs[ii].xmax) &&
+       (tpt.Y() >= bn_boxs[ii].ymin) &&
+       (tpt.Y() <= bn_boxs[ii].ymax) &&
+       (tpt.Z() >= bn_boxs[ii].zmin) &&
+       (tpt.Z() <= bn_boxs[ii].zmax) ) 
+    return 1;
+  else
+    return 0;
+
+  // done here!
 
 }
 
