@@ -505,7 +505,7 @@ program tester
   xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
 
   call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-       , facet_file = 'civil3.facet' &
+       , facet_file = 'civil3_fine.facet' &
        , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0)
 
   ! done here

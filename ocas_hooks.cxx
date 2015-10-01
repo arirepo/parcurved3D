@@ -42,6 +42,7 @@
 #include "STEPControl_Reader.hxx"
 #include <BRepMesh_IncrementalMesh.hxx>
 #include "Poly_Triangulation.hxx"
+//#include <omp.h>
 
 //prototypes
 int init_bn_boxs(void);
@@ -51,6 +52,7 @@ int pt_in_box(int ii, const gp_Pnt& tpt);
 // macros
 #define MY_MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MY_MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
+#define TRI_QUERY_FAST
 
 //
 // Statically accessible vars and storage
@@ -164,6 +166,8 @@ extern "C" int clean_statics(void)
   return 0;
 }
 
+#ifndef TRI_QUERY_FAST
+
 // finds the local parametric coords "uv[]" of the given physical
 // point "XYZ" on a CAD database in IGES format.
 //
@@ -255,6 +259,99 @@ extern "C" int find_pts_on_database(int npts, double *pts
   // done here!
   return 0;
 }
+
+#else //use the FAST version
+
+// finds the local parametric coords "uv[]" of the given physical
+// point "XYZ" on a CAD database in IGES or STEP format.
+//
+// npts = number of points in the query
+// *pts = [x1, y1, z1, x2, y2, z2, ....] coords of the points
+// *found = [CAD Face Number = Found,
+//          -1              = Not Found] 
+//          for each point (a vector of npts length)
+// *uv = [u1, v1, u2, v2, u3, v3, ....] surface parameters of found points
+// tol = the given tolerance to match the CAD face
+//
+extern "C" int find_pts_on_database(int npts, double *pts
+				    , int *found, double *uv, double tol)
+{
+
+  // local vars
+  gp_Pnt pt_samp, pt_samp2;
+  gp_Pnt2d pt_uv;
+  double dist;
+  int ii, indx;
+  double *min_dist = NULL;
+
+  // init.
+  min_dist = (double *)malloc( npts * sizeof(double) );
+  for (indx = 0; indx < npts; indx++)
+    {
+      found[indx] = -1;
+      min_dist[indx] = 10. * tol; //1.e14;
+    }
+
+  // HARD Reset!
+  anExp_static.ReInit();
+
+  ii = 0; //Now, explore and loop over faces
+  for(;(anExp_static.More() && (1));anExp_static.Next()){
+    ii = ii + 1;
+
+    const TopoDS_Face& anFace = TopoDS::Face(anExp_static.Current());
+    // get face as surface
+    const Handle(Geom_Surface) &surface = BRep_Tool::Surface(anFace);
+    ShapeAnalysis_Surface sas(surface);
+
+// #pragma omp parallel for shared(found, uv, tol, pts, npts, anExp_static, ii, min_dist) private(pt_samp, pt_samp2, pt_uv, dist) firstprivate(sas) schedule(auto)
+    for (indx = 0; indx < npts; indx++)
+      {
+
+    // take one point from input array
+    pt_samp.SetX(pts[indx*3]);
+    pt_samp.SetY(pts[indx*3+1]);
+    pt_samp.SetZ(pts[indx*3+2]);
+
+    // skip if out-of-bound for "ii"th CAD face
+    if ( !pt_in_box(ii, pt_samp) ) continue;
+
+    // find parameters uv of that point on the
+    // given surface with the given tolerance
+    pt_uv = sas.ValueOfUV(pt_samp, tol);
+  
+    //reevaluate the 3D coordinate of the point using surface parametrization 
+    pt_samp2 = sas.Value(pt_uv.X(),pt_uv.Y());
+    dist = sqrt( (pt_samp2.X() - pt_samp.X()) * (pt_samp2.X() - pt_samp.X()) 
+      + (pt_samp2.Y() - pt_samp.Y()) * (pt_samp2.Y() - pt_samp.Y()) 
+      + (pt_samp2.Z() - pt_samp.Z()) * (pt_samp2.Z() - pt_samp.Z()));
+
+
+    if ( dist <= min_dist[indx] ) // found! 
+      {
+	min_dist[indx] = dist;
+	found[indx]  = ii;
+	uv[indx*2]   = pt_uv.X();
+	uv[indx*2+1] = pt_uv.Y();
+      }
+    else //NOT found!
+      {
+
+      }
+
+      } //next node in the list
+
+
+  } //next CAD face
+
+  //cleanups;
+  free(min_dist);
+
+  // done here!
+  return 0;
+}
+
+#endif
 
 //
 // assuming point "A" with parametric coords "uv"
