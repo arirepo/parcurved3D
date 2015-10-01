@@ -377,9 +377,7 @@ contains
 
     ! CAD corresponding data struct
     integer, allocatable :: cent_cad_found(:) !nbntri
-    real*8, allocatable :: xc(:), uvc(:)
-    integer :: tpt, ii, jj, kk
-    real*8 :: tuv(2), txyz(3), xbn(3,3)
+    real*8, allocatable :: uvc(:)
 
     ! read the facet file
     print *, 'starting curved tetrahedral mesh generator'
@@ -402,14 +400,58 @@ contains
          , icon = tetcon, u = uu, appendit = .false.)
     if ( allocated(uu) ) deallocate(uu)
 
+    ! find the CAD face of boundary triangles
+    call find_bn_tris_CAD_face(cad_file = cad_file, nbntri = nbntri &
+         , bntri = bntri, xf = xf, cent_cad_found = cent_cad_found &
+         , uvc = uvc, tol = tol)
+
+    ! map one face curved tets
+
+    ! map one edge curved tets
+
+    ! map linear tets
+
+
+    ! clean ups
+    if ( allocated(x) ) deallocate(x)
+    if ( allocated(icontag) ) deallocate(icontag)
+    if ( allocated(xf) ) deallocate(xf)
+    if ( allocated(tetcon) ) deallocate(tetcon)
+    if ( allocated(neigh) ) deallocate(neigh)
+    if ( allocated(bntri) ) deallocate(bntri)
+
+    ! done here
+  end subroutine curved_tetgen_geom
+
+  subroutine find_bn_tris_CAD_face(cad_file, nbntri, bntri, xf &
+       , cent_cad_found, uvc, tol)
+    implicit none
+    character(len=*), intent(in) :: cad_file
+    integer, intent(in) :: nbntri
+    integer, dimension(:), intent(in) :: bntri
+    real*8, dimension(:, :), intent(in) :: xf
+    integer, allocatable :: cent_cad_found(:) !nbntri
+    real*8, allocatable :: uvc(:)
+    real*8, intent(in) :: tol
+
+    ! local vars
+    ! CAD corresponding data struct
+    real*8, allocatable :: xc(:)
+    integer :: tpt, ii, jj, kk
+    real*8 :: tuv(2), txyz(3), xbn(3,3)
+
     ! init CAD file
     call init_IGES_f90(fname = cad_file)
 
     ! find the CAD tag of the centroid of bn faces (tris)
+    if ( allocated(cent_cad_found) ) deallocate(cent_cad_found)
     allocate(cent_cad_found(nbntri))
     cent_cad_found = 0
+
     allocate(xc(3*nbntri))
     xc = 0.0d0
+
+    if ( allocated(uvc) ) deallocate(uvc)
     allocate(uvc(2*nbntri))
     uvc = 0.0d0
 
@@ -425,11 +467,10 @@ contains
     ! finalize the center coord
     xc = xc / 3.0d0 
     ! find the CAD tag of the centroids
-print *, 'find the CAD tag of the centroids'
+    print *, 'find the CAD tag of the centroids'
     call find_pts_on_database_f90(npts = nbntri, pts = xc &
          , found = cent_cad_found, uv = uvc, tol = tol)
 
-    ! print *, 'cent_cad_found = ', cent_cad_found
     ! compute physical center of bn tris and export to MATLAB ...
     open (unit=10, file='tmp.m', status='unknown', action='write')
     write(10, *) 'x = ['
@@ -438,7 +479,7 @@ print *, 'find the CAD tag of the centroids'
        tuv(2) = uvc(2*(ii-1) + 2)
        if (cent_cad_found(ii) .eq. -1) cycle
        call uv2xyz_f90(CAD_face = cent_cad_found(ii), uv = tuv, xyz = txyz)
-print *, 'writing the center of bntri #', ii
+       print *, 'writing the center of bntri #', ii
        write(10, *) txyz, ';'
     end do
     write(10, *) '];'
@@ -460,24 +501,15 @@ print *, 'writing the center of bntri #', ii
     write(10, *) '];'
     close(10)
 
-    ! map one face curved tets
-
-    ! map one edge curved tets
 
     ! close CAD objects
     call clean_statics_f90()
 
-    ! clean ups
-    if ( allocated(x) ) deallocate(x)
-    if ( allocated(icontag) ) deallocate(icontag)
-    if ( allocated(xf) ) deallocate(xf)
-    if ( allocated(tetcon) ) deallocate(tetcon)
-    if ( allocated(neigh) ) deallocate(neigh)
-    if ( allocated(bntri) ) deallocate(bntri)
-    if ( allocated(cent_cad_found) ) deallocate(cent_cad_found)
+    ! cleanups
+    if ( allocated(xc) ) deallocate(xc)
 
     ! done here
-  end subroutine curved_tetgen_geom
+  end subroutine find_bn_tris_CAD_face
 
 end module curved_tet
 
