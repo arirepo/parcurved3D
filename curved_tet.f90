@@ -363,6 +363,7 @@ contains
     real*8, intent(in) :: tol
 
     ! local vars
+    integer :: ii
     integer :: npts, nquad, ntri
     real*8, dimension(:), allocatable :: x
     integer, dimension(:), allocatable :: icontag
@@ -374,6 +375,11 @@ contains
     integer, dimension(:), allocatable :: bntri
 
     real*8, allocatable :: uu(:, :)
+
+    ! domain decomposition (graph partitioning) vars
+    integer, dimension(:), allocatable :: xadj, adj, vwgt, part
+    integer :: nparts
+    logical, dimension(:), allocatable :: vis_mask
 
     ! CAD corresponding data struct
     integer, allocatable :: cent_cad_found(:) !nbntri
@@ -399,6 +405,34 @@ contains
     call write_u_tecplot_tet(meshnum=1, outfile='linear_tets.tec', x = xf &
          , icon = tetcon, u = uu, appendit = .false.)
     if ( allocated(uu) ) deallocate(uu)
+
+    call find_tet_adj_csr_zero_based(neigh = neigh, xadj = xadj, adj = adj)
+
+    nparts = 10
+    allocate(vwgt(size(neigh, 1)), part(size(neigh, 1)))
+    vwgt = 1
+    call call_metis_graph_parti(xadj = xadj, adjncy = adj, vwgt = vwgt &
+         , nparts = nparts, part = part)
+
+    ! write to tecplot
+    allocate(vis_mask(size(neigh, 1)))
+    allocate(uu(1, size(xf,2)))
+    do ii = 1, nparts
+
+       uu = dble(ii)
+       vis_mask = (part .eq. (ii-1))
+
+       if ( ii .eq. 1) then
+          call write_u_tecplot_tet(meshnum=ii, outfile='partitioned.tec', x = xf &
+               , icon = tetcon, u = uu, appendit = .false., is_active = vis_mask)
+       else
+          call write_u_tecplot_tet(meshnum=ii, outfile='partitioned.tec', x = xf &
+               , icon = tetcon, u = uu, appendit = .true., is_active = vis_mask)
+       end if
+
+    end do
+    if ( allocated(uu) ) deallocate(uu)
+    if ( allocated(vis_mask) ) deallocate(vis_mask)
 
     ! find the CAD face of boundary triangles
     call find_bn_tris_CAD_face(cad_file = cad_file, nbntri = nbntri &
@@ -511,6 +545,75 @@ contains
     ! done here
   end subroutine find_bn_tris_CAD_face
 
+  !
+  subroutine find_tet_adj_csr_zero_based(neigh, xadj, adj)
+    implicit none
+    integer, dimension(:, :), intent(in) :: neigh
+    integer, dimension(:), allocatable :: xadj, adj
+
+    ! local vars
+    integer :: ii, jj, nadj, indx
+
+    ! counting and sizing
+    nadj = 0
+    do ii = 1, size(neigh, 1) ! loop over all tets 
+       do jj = 1, size(neigh, 2) ! over neighbors
+          if (neigh(ii, jj) > 0 ) nadj = nadj + 1
+       end do
+    end do
+
+    ! alloc
+    if ( allocated(xadj) ) deallocate(xadj)
+    allocate(xadj(size(neigh, 1)+1))
+    if ( allocated(adj) ) deallocate(adj)
+    allocate(adj(nadj))
+
+    ! fill them
+    xadj(1) = 0
+    indx = 1
+    do ii = 1, size(neigh, 1) 
+       do jj = 1, size(neigh, 2)
+          if (neigh(ii, jj) > 0 ) then
+             adj(indx) = neigh(ii, jj)
+             indx = indx + 1
+          end if
+       end do
+       xadj(ii+1) = indx - 1
+    end do
+
+    adj = adj - 1 ! zero-based cell number
+
+    ! done here
+  end subroutine find_tet_adj_csr_zero_based
+
+  !
+  subroutine call_metis_graph_parti(xadj, adjncy, vwgt, nparts, part)
+    implicit none
+    integer, intent(in) :: xadj(:), adjncy(:), vwgt(:)
+    integer, intent(in) :: nparts
+    integer, intent(out) :: part(:)
+
+
+    ! local vars
+    integer :: nvtxs, ncon
+    integer, pointer :: vsize(:) =>null(), adjwgt(:) =>null()
+    real*8, pointer :: tpwgts(:)=>null(), ubvec=>null()
+    integer, pointer :: options(:) =>null()
+    integer :: edgecut
+
+    ! init
+    nvtxs = size(xadj) - 1
+    ncon = 1
+
+    ! call C-func
+    call METIS_PartGraphRecursive(nvtxs, ncon, xadj &
+         ,adjncy, vwgt, vsize, adjwgt & 
+         ,nparts, tpwgts, ubvec, options & 
+         ,edgecut, part)
+
+    ! done here
+  end subroutine call_metis_graph_parti
+
 end module curved_tet
 
 program tester
@@ -536,7 +639,7 @@ program tester
   allocate(xh(3))
   xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
 
-  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+  call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
        , facet_file = 'civil3_fine.facet' &
        , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0)
 
