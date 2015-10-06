@@ -384,6 +384,7 @@ contains
     ! CAD corresponding data struct
     integer, allocatable :: cent_cad_found(:) !nbntri
     real*8, allocatable :: uvc(:)
+    integer, dimension(:, :), allocatable :: tet_shifted
 
     ! read the facet file
     print *, 'starting curved tetrahedral mesh generator'
@@ -438,6 +439,15 @@ contains
     call find_bn_tris_CAD_face(cad_file = cad_file, nbntri = nbntri &
          , bntri = bntri, xf = xf, cent_cad_found = cent_cad_found &
          , uvc = uvc, tol = tol)
+
+    ! shift tetcon for each tet such that the first three nodes
+    ! are matching the boundary triangle face. This is required
+    ! before we apply our analytical transformation
+    !
+    allocate( tet_shifted(size(tetcon, 1), size(tetcon, 2)) )
+    call shift_tetcon(nbntri = nbntri, bntri = bntri &
+         , tetcon = tetcon, tetcon2 = tet_shifted)
+ 
 
     ! map one face curved tets
 
@@ -614,6 +624,127 @@ contains
     ! done here
   end subroutine call_metis_graph_parti
 
+  !
+  subroutine shift_tetcon(nbntri, bntri, tetcon, tetcon2)
+    implicit none
+    integer, intent(in) :: nbntri
+    integer, dimension(:), intent(in), target :: bntri
+    integer, dimension(:, :), intent(in) :: tetcon
+    integer, dimension(:, :), intent(out) :: tetcon2
+
+    ! local vars
+    integer :: ii, i1, i2, tetnum
+    integer, dimension(:), pointer :: pts => null(), tets_on_face => null()
+
+    do ii = 1, nbntri
+
+       i1 = 6* (ii-1) + 1
+       i2 = 6* (ii-1) + 3
+
+       pts => bntri(i1:i2)  
+
+       i1 = 6* (ii-1) + 5
+       i2 = 6* (ii-1) + 6
+
+       tets_on_face => bntri(i1:i2)
+
+       tetnum = maxval(tets_on_face)
+
+       ! print *, '***bntri = ', ii, 'bn_pts = ', pts, 'tet_pts = ', tetcon(tetnum, :)
+       ! print *, 'results = ', a_in_b(a = pts, b = tetcon(tetnum, 1:3))
+
+       ! bullet proofing ...
+       if ( .not. a_in_b(a = pts, b = tetcon(tetnum, :)) ) then
+          print *, 'Not all boundary tri points are in the given tet!!! stop'
+          stop
+       end if
+
+       !
+       call shift_tet_to_bn_tri(tet0 = tetcon(tetnum, :), tri = pts &
+            , tet = tetcon2(tetnum, :))
+
+!        print *, 'tetcon2 = ', tetcon2(tetnum, :)
+! if ( any ( tetcon2(tetnum, :) .ne. tetcon(tetnum, :) ) .and. a_in_b(a = pts, b = tetcon(tetnum, 1:3)) ) then
+! print *, 'BADDDDDDDDD'
+! stop
+! end if
+
+    end do
+
+    ! done here
+  end subroutine shift_tetcon
+
+  ! checks see if array(set) <a> is
+  ! in array <b>. order is not important.
+  ! if "yes" then returns .true. otherwise
+  ! returns .false.
+  ! 
+  function a_in_b(a, b)
+    implicit none
+    integer, dimension(:), intent(in) :: a, b
+    logical :: a_in_b
+
+    ! local vars
+    integer :: ii, jj
+
+    do ii = 1, size(a)
+       a_in_b = .false.
+       do jj = 1, size(b)
+          if ( a(ii) .eq. b(jj) ) then
+             a_in_b = .true.
+             exit
+          end if
+       end do
+       if ( .not. a_in_b ) exit
+    end do
+
+    ! done here
+  end function a_in_b
+
+  !
+  subroutine shift_tet_to_bn_tri(tet0, tri, tet)
+    implicit none
+    integer, dimension(:), intent(in) :: tet0, tri
+    integer, dimension(:), intent(out) :: tet
+
+    ! local vars
+    integer :: ii, jj, loc
+    logical :: found
+
+    ! init copy
+    tet = tet0
+
+    ! first find which tet0(:) point is
+    ! not in tri(:). That's the tet's appex.
+    ! Then set that as "loc" for shift to right.
+    ! The appex should always go to the last
+    ! location in connectivity array of the tet
+    ! at the end when shifting is complete.
+
+    do ii = 1, 4 
+
+       found = .false.
+       do jj = 1, 3
+          if ( tri(jj) .eq. tet(ii) ) then
+             found = .true.
+             exit
+          end if
+       end do
+
+       if ( .not. found ) then
+          loc = ii
+          exit
+       end if
+
+    end do
+
+    ! Now, shift to right accordingly
+    !
+    tet = cshift(tet, (ii-4))
+
+    ! done here
+  end subroutine shift_tet_to_bn_tri
+
 end module curved_tet
 
 program tester
@@ -640,7 +771,7 @@ program tester
   xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
 
   call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
-       , facet_file = 'civil3_fine.facet' &
+       , facet_file = 'civil3.facet' &
        , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0)
 
   ! done here
