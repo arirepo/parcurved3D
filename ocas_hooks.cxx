@@ -523,6 +523,39 @@ int pt_in_box(int ii, const gp_Pnt& tpt)
 
 }
 
+extern "C" int xyz2uv(int CAD_face, double *xyz, double *uv, double tol)
+{
+
+  gp_Pnt pt_samp;
+  gp_Pnt2d pt_uv;
+  anExp_static.ReInit();
+
+  // go to that face sequntially 
+  for(int ii = 1; ii < CAD_face; ii++)
+    {
+      anExp_static.Next();
+    }
+
+  const TopoDS_Face& anFace = TopoDS::Face(anExp_static.Current());
+  // get face as surface
+  const Handle(Geom_Surface) &surface = BRep_Tool::Surface(anFace);
+  ShapeAnalysis_Surface sas(surface);
+
+  // fill the point object
+  pt_samp.SetX(xyz[0]);
+  pt_samp.SetY(xyz[1]);
+  pt_samp.SetZ(xyz[2]);
+
+  // find parameters uv of that point on the
+  // given surface with the given tolerance
+  pt_uv = sas.ValueOfUV(pt_samp, tol);
+  uv[0] = pt_uv.X();
+  uv[1] = pt_uv.Y();
+  
+  // done here!
+  return 0;
+}
+
 #ifdef TEST  
 int main(int argc, char *argv[])
 {

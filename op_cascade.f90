@@ -67,10 +67,25 @@ module op_cascade
 
   end interface
 
+  interface
+     subroutine xyz2uv_intf(CAD_face, xyz, uv, tol) &
+          bind( C, name = "xyz2uv")
+       use iso_c_binding, only : c_int, c_double
+       import
+       implicit none
+       integer(c_int), value :: CAD_face
+       real(c_double) :: xyz(3)
+       real(c_double) :: uv(2)
+       real(c_double), value :: tol
+
+     end subroutine xyz2uv_intf
+
+  end interface
+
   ! Readers
   public :: init_STEP_f90, init_IGES_f90
   ! Queries
-  public :: find_pts_on_database_f90, uv2xyz_f90
+  public :: find_pts_on_database_f90, uv2xyz_f90, xyz2uv_f90
   ! Cleanups
   public :: clean_statics_f90
 
@@ -196,6 +211,41 @@ contains
 
     ! done here
   end subroutine uv2xyz_f90
+
+  subroutine xyz2uv_f90(CAD_face, xyz, uv, tol)
+    use iso_c_binding, only : c_int, c_double
+    implicit none
+    integer, intent(in) :: CAD_face
+    real*8, dimension(:), intent(in) :: xyz
+    real*8, dimension(:), intent(out) :: uv
+    real*8, intent(in) :: tol
+
+    !local vars
+    integer :: i
+    integer(c_int) :: CAD_face_in
+    real(c_double) :: xyz_in(3)
+    real(c_double) :: uv_out(2)
+    real(c_double) :: tol_in
+
+    ! init 
+    CAD_face_in = CAD_face
+
+    do i = 1, 3
+       xyz_in(i) = xyz(i)
+    end do
+
+    tol_in = tol
+
+    ! call C-func
+    call xyz2uv_intf(CAD_face_in, xyz_in, uv_out, tol_in)
+
+    ! fillout the return arrays and values
+    do i = 1, 2
+       uv(i) = uv_out(i)
+    end do
+
+    ! done here
+  end subroutine xyz2uv_f90
 
 end module op_cascade
 
