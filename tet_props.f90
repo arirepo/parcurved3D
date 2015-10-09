@@ -4,7 +4,7 @@ module tet_props
   private
 
 
-  public :: tetrahedron_dihedral_angles
+  public :: tetrahedron_dihedral_angles, tetrahedron_edge_length
 
 contains
 

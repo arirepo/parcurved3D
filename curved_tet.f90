@@ -165,13 +165,15 @@ contains
   ! the result to tecplot file named fname. 
   ! Has the option to append to the previous export.
   !
-  subroutine export_tet_face_curve(x, y, z, mina, maxa, fname, meshnum, append_it)
+  subroutine export_tet_face_curve(x, y, z, mina, maxa, fname &
+       , meshnum, append_it, ref_length)
     implicit none
     real*8, dimension(:), intent(in) :: x, y, z
     real*8, intent(in) :: mina, maxa
     character(len = *), intent(in) :: fname
     integer, intent(in) :: meshnum
     logical , intent(in) :: append_it
+    real*8, intent(in), optional ::  ref_length
 
     ! local vars
     integer :: i
@@ -206,8 +208,13 @@ contains
 
     ! filter
     allocate(is_active(size(tetcon, 1)))
-    call filter_bad_tets(x = xf, icon = tetcon, mina = mina &
-         , maxa= maxa, active = is_active)
+    if ( present(ref_length) ) then
+       call filter_bad_tets(x = xf, icon = tetcon, mina = mina &
+            , maxa= maxa, active = is_active, ref_length = ref_length)
+    else
+       call filter_bad_tets(x = xf, icon = tetcon, mina = mina &
+            , maxa= maxa, active = is_active)
+    end if
 
     ! write to tecplot
     print *, 'writing to Tecplot ...'
@@ -234,12 +241,13 @@ contains
   end subroutine export_tet_face_curve
 
   ! filter bad tetrahedrons
-  subroutine filter_bad_tets(x, icon, mina, maxa, active)
+  subroutine filter_bad_tets(x, icon, mina, maxa, active, ref_length)
     implicit none
     real*8, dimension(:, :), intent(in) :: x
     integer, dimension(:, :), intent(in) :: icon
     real*8, intent(in) :: mina, maxa
     logical, dimension(:), intent(out) :: active
+    real*8, intent(in), optional :: ref_length
 
     ! local vars
     integer :: i, j, pt
@@ -253,6 +261,7 @@ contains
           pt = icon(i, j)
           xtet(:, j) = x(:, pt)
        end do
+
        ! compute measure
        call tetrahedron_dihedral_angles ( tetra = xtet, angle = ang )
        !
@@ -264,6 +273,18 @@ contains
           active(i) = .true.
        else
           active(i) = .false.
+       end if
+
+       if ( present( ref_length) ) then
+          call tetrahedron_edge_length ( tetra = xtet, edge_length = ang)
+
+          ! decide which one to hide
+          if ( (maxval(ang) <= ref_length) ) then
+             active(i) = active(i) .and. .true.
+          else
+             active(i) = .false.
+          end if
+
        end if
 
     end do
@@ -393,6 +414,9 @@ contains
     real*8, dimension(3) :: xA, x3, x4
     real*8, dimension(2, 3) :: uv
 
+    ! visualization data struct
+    real*8 :: xtet(3, 4), lens(6)
+    real*8 :: ref_length
 
     ! read the facet file
     print *, 'starting curved tetrahedral mesh generator'
@@ -494,14 +518,21 @@ end if
        end do
 
        ! export the generated curved element
+       ! fill this tet coords
+       do jj = 1, 4
+          xtet(:, jj) = xf(:, tetcon(ii,jj))
+       end do
+       call tetrahedron_edge_length ( tetra = xtet, edge_length = lens)
+       ref_length = 1.5d0 * maxval(lens) / dble(dd)
+
        if ( indx .eq. 1) then
           call export_tet_face_curve(x = xx, y=yy, z=zz, mina = 0.0d0 &
-               , maxa = 200.0d0, fname = 'curved.tec' &
-               , meshnum = indx, append_it = .false.)  
+               , maxa = 160.0d0, fname = 'curved.tec' &
+               , meshnum = indx, append_it = .false., ref_length = ref_length)  
        else
           call export_tet_face_curve(x = xx, y=yy, z=zz, mina = 0.0d0 &
-               , maxa = 200.0d0, fname = 'curved.tec' &
-               , meshnum = indx, append_it = .true.) 
+               , maxa = 160.0d0, fname = 'curved.tec' &
+               , meshnum = indx, append_it = .true., ref_length = ref_length) 
        end if
 
        indx = indx + 1
