@@ -73,6 +73,7 @@ Standard_Real zmin;
 Standard_Real zmax;
 };
 struct topods_face_bn_box bn_boxs[MAX_TOPODS_FACES];
+#define BOX_MARGIN_FACTOR 0.1
 
 // reads STEP database and finally initializes
 // the static topological classes Shape and Explorer.
@@ -508,13 +509,16 @@ int init_bn_boxs(void)
 //
 int pt_in_box(int ii, const gp_Pnt& tpt)
 {
+  double dx = BOX_MARGIN_FACTOR * (bn_boxs[ii].xmax - bn_boxs[ii].xmin);
+  double dy = BOX_MARGIN_FACTOR * (bn_boxs[ii].ymax - bn_boxs[ii].ymin);
+  double dz = BOX_MARGIN_FACTOR * (bn_boxs[ii].zmax - bn_boxs[ii].zmin);
 
-  if ( (tpt.X() >= bn_boxs[ii].xmin) && 
-       (tpt.X() <= bn_boxs[ii].xmax) &&
-       (tpt.Y() >= bn_boxs[ii].ymin) &&
-       (tpt.Y() <= bn_boxs[ii].ymax) &&
-       (tpt.Z() >= bn_boxs[ii].zmin) &&
-       (tpt.Z() <= bn_boxs[ii].zmax) ) 
+  if ( (tpt.X() >= (bn_boxs[ii].xmin - dx)) && 
+       (tpt.X() <= (bn_boxs[ii].xmax + dx)) &&
+       (tpt.Y() >= (bn_boxs[ii].ymin - dy)) &&
+       (tpt.Y() <= (bn_boxs[ii].ymax + dy)) &&
+       (tpt.Z() >= (bn_boxs[ii].zmin - dz)) &&
+       (tpt.Z() <= (bn_boxs[ii].zmax + dz)) ) 
     return 1;
   else
     return 0;

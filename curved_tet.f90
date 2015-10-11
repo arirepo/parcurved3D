@@ -413,6 +413,7 @@ contains
     real*8, dimension(:), allocatable :: rr, ss, tt, xx, yy, zz
     real*8, dimension(3) :: xA, x3, x4
     real*8, dimension(2, 3) :: uv
+    real*8, dimension(3, 3) :: xbot
 
     ! visualization data struct
     real*8 :: xtet(3, 4), lens(6)
@@ -485,7 +486,7 @@ contains
     ! /////////
     ! /////////
     ! generate the lagrangian tet. interpolation points
-    dd = 8
+    dd = 6
     indx = 1
     call coord_tet(dd, rr, ss, tt)
     allocate(xx(size(rr)), yy(size(rr)), zz(size(rr))) 
@@ -493,29 +494,37 @@ contains
     ! map one face curved tets
     do ii = 1, size(tet2bn_tri)
        if ( tet2bn_tri(ii) .eq. -1 ) cycle !interior tet
-! if ( indx .eq. 2 ) stop
+       ! 
        CAD_face = cent_cad_found(tet2bn_tri(ii))
-! print *, 'CAD_face =' , CAD_face
-if ( CAD_face .eq. -1 ) cycle !bn tet not on CAD database
-       ! element 1
-if ( indx .eq. 147 ) then
-print *, 'dbug, shifted = ', tet_shifted(ii, :), 'orig = ', tetcon(ii, :)
-!stop
-end if
+       ! print *, 'CAD_face =' , CAD_face
+       if ( CAD_face .eq. -1 ) cycle !bn tet not on CAD database
+
+       !
        xA = xf(:, tet_shifted(ii, 4))
+
+       ! compute local uv on that face
        do jj = 1, 3
           call xyz2uv_f90(CAD_face = CAD_face &
                , xyz = xf(:, tet_shifted(ii, jj)), uv = uv(:,jj), tol = 1.0d-6)
        end do
 
+       ! compute xbot
+       do jj = 1, 3
+          xbot(:, jj) = xf(:, tet_shifted(ii, jj))
+       end do
+
        do jj = 1, size(rr)
           ! call master2curved_tet( r = r(i), s = s(i), t = t(i), uv = uv &
           !      , xA = xA, x = x(i), y = y(i), z = z(i) )
-          call master2curved_tet_ocas(CAD_face = CAD_face &
-               , r = rr(jj),s = ss(jj),t = tt(jj) &
-               , uv = uv, xA = xA, x = xx(jj), y = yy(jj), z = zz(jj))
+          ! call master2curved_tet_ocas(CAD_face = CAD_face &
+          !      , r = rr(jj),s = ss(jj),t = tt(jj) &
+          !      , uv = uv, xA = xA, x = xx(jj), y = yy(jj), z = zz(jj))
+
+          call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
+               , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj), z = zz(jj))
 
        end do
+
 
        ! export the generated curved element
        ! fill this tet coords
@@ -536,10 +545,12 @@ end if
        end if
 
        indx = indx + 1
-       ! map one edge curved tets
-       print *, 'indxxx = ', indx
+
+       print *, 'indx = ', indx
 
     end do
+
+    ! map one edge curved tets
 
     ! map linear tets
 
@@ -896,6 +907,59 @@ end if
     ! done here
   end subroutine master2curved_tet_ocas
 
+  subroutine master2curved_tet_ocas_close(r,s,t, xbot, xA, tol, x, y, z)
+    implicit none
+    real*8, intent(in) :: r, s, t
+    real*8, dimension(:, :), intent(in) :: xbot
+    real*8, dimension(:), intent(in) :: xA
+    real*8, intent(in) :: tol
+    real*8, intent(out) :: x, y, z
+
+    ! local vars
+    integer :: ii, CAD_face(1)
+    real*8 :: u, v, alpha
+    real*8, dimension(3) :: Sf, xf, xbot_fin
+    !
+    real*8 :: val   ! the value of basis  
+    real*8, dimension(2) :: der, uvout  
+
+
+    if ( abs(t - 1.0d0) <= 1.0d-15 ) then
+       u = r ! simple
+       v = s ! simple
+    else 
+       u = r/(1-t)
+       v = s/(1-t)
+    end if
+    alpha = t
+
+    ! compute final xbot
+    xbot_fin = 0.0d0
+    do ii = 1, 3
+       call psi(etype = 1, i = ii, r = u, s = v, val = val, der = der)
+       xbot_fin = xbot_fin + val * xbot(:, ii)
+    end do
+
+    ! compute surface points
+    ! call Suv(u = uv_fin(1), v= uv_fin(2), S = Sf)
+    ! call Suv_ocas(uv = uv_fin, CAD_face = CAD_face, S = Sf)
+    call find_pts_on_database_f90(npts = 1, pts = xbot_fin, found = CAD_face, uv = uvout, tol = tol)
+    if ( CAD_face(1) .eq. -1 ) then
+       print *, 'CAD_face .eq. -1 in master2curved_tet_ocas_close(...)! increase tolerance! stop'
+       stop
+    end if
+
+    call uv2xyz_f90(CAD_face = CAD_face(1), uv = uvout, xyz = Sf)
+
+    xf = alpha * xA + (1.0d0 - alpha) * Sf
+
+    x = xf(1)
+    y = xf(2)
+    z = xf(3)
+
+    ! done here
+  end subroutine master2curved_tet_ocas_close
+
 end module curved_tet
 
 program tester
@@ -909,21 +973,37 @@ program tester
   !
   ! call tester1()
 
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = (/ 0.5714d0, 0.4333d0, 0.1180d0 /)
+
+  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+  !      , facet_file = 'missile_spect3.facet' &
+  !      , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0)
+
   nhole = 1
   allocate(xh(3))
-  xh = (/ 0.5714d0, 0.4333d0, 0.1180d0 /)
+  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
 
-  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-       , facet_file = 'missile_spect3.facet' &
-       , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0)
+  call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
+       , facet_file = 'civil3.facet' &
+       , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0)
 
   ! nhole = 1
   ! allocate(xh(3))
-  ! xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+  ! xh = 0.0d0
 
-  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
-  !      , facet_file = 'civil3.facet' &
-  !      , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0)
+  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+  !      , facet_file = 'pin.facet' &
+  !      , cad_file = 'pin.iges', nhole = nhole, xh = xh, tol = .03d0)
+
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = 0.0d0
+
+  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+  !      , facet_file = 'sphere.facet' &
+  !      , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0)
 
   ! done here
 end program tester
