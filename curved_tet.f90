@@ -9,6 +9,10 @@ module curved_tet
 
   real*8, parameter :: Radius = 2.0d0
 
+  ! type int_array
+  !    integer, dimension(:), allocatable :: val
+  ! end type int_array
+
   public :: coord_tet, master2curved_tet
   public :: export_tet_face_curve, master2curved_edg_tet
   public :: curved_tetgen_geom
@@ -394,6 +398,8 @@ contains
     integer, dimension(:, :), allocatable :: tetcon, neigh
     integer :: nbntri
     integer, dimension(:), allocatable :: bntri
+    ! integer, dimension(:, :), allocatable :: bntri2bntri
+    ! type(int_array), dimension(:), allocatable :: node2bntri
 
     real*8, allocatable :: uu(:, :)
 
@@ -407,6 +413,8 @@ contains
     real*8, allocatable :: uvc(:)
     integer, dimension(:, :), allocatable :: tet_shifted
     integer, dimension(:), allocatable :: tet2bn_tri
+    ! integer :: neigh_CAD_face(3)
+    ! logical :: is_CAD_bn_tri
 
     ! master element data struct
     integer :: dd, indx, CAD_face
@@ -432,6 +440,21 @@ contains
     call tetmesh(tetgen_cmd, npts, x, nquad, ntri, icontag, nhole, xh &
          , xf, tetcon, neigh, nbntri, bntri)
     print *, 'initial tetmesh is done!'
+
+    ! ! find the boundary tri connectivity map
+    ! ! useful for speedup the code when deciding on
+    ! ! UV-projection or closest point
+    ! call find_bntri2bntri_map(nbntri = nbntri, bntri = bntri, bntri2bntri = bntri2bntri)
+
+    ! ! bullet proofing ...
+    ! if ( any ( bntri2bntri .eq. -1) ) then
+    !    print *, 'boundary triangles are not all connected together! stop'
+    !    stop
+    ! end if
+
+    ! allocate(node2bntri(size(xf, 2)))
+    ! call find_node2bntri_map(nbntri = nbntri, bntri = bntri, node2bntri = node2bntri)
+
 
     ! export linear tetmesh
     allocate(uu(1, size(xf,2)))
@@ -513,15 +536,31 @@ contains
           xbot(:, jj) = xf(:, tet_shifted(ii, jj))
        end do
 
+       ! ! compute the CAD face tag of the neighbors to this boundary
+       ! ! triangle. 
+       ! neigh_CAD_face = cent_cad_found(bntri2bntri(tet2bn_tri(ii), :))
+
+       ! is_CAD_bn_tri = is_tri_near_CAD_boundary(node2bntri = node2bntri &
+       !      , CAD_face = cent_cad_found, nodes = tet_shifted(ii, 1:3))
+
        do jj = 1, size(rr)
           ! call master2curved_tet( r = r(i), s = s(i), t = t(i), uv = uv &
           !      , xA = xA, x = x(i), y = y(i), z = z(i) )
-          ! call master2curved_tet_ocas(CAD_face = CAD_face &
-          !      , r = rr(jj),s = ss(jj),t = tt(jj) &
-          !      , uv = uv, xA = xA, x = xx(jj), y = yy(jj), z = zz(jj))
 
-          call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
-               , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj), z = zz(jj))
+          ! if ( all(neigh_CAD_face(1) .eq. neigh_CAD_face) ) then
+
+          ! if ( .not.  is_CAD_bn_tri) then
+
+             ! call master2curved_tet_ocas(CAD_face = CAD_face &
+             !      , r = rr(jj),s = ss(jj),t = tt(jj) &
+             !      , uv = uv, xA = xA, x = xx(jj), y = yy(jj), z = zz(jj))
+
+          ! else
+
+             call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
+                  , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj), z = zz(jj))
+
+          ! end if
 
        end do
 
@@ -959,6 +998,154 @@ contains
 
     ! done here
   end subroutine master2curved_tet_ocas_close
+
+  ! subroutine find_bntri2bntri_map(nbntri, bntri, bntri2bntri)
+  !   implicit none
+  !   integer, intent(in) :: nbntri
+  !   integer, dimension(:), intent(in) :: bntri
+  !   integer, dimension(:, :), allocatable :: bntri2bntri
+
+  !   ! local vars
+  !   integer :: i, i1, i2
+  !   integer, allocatable :: bn(:, :) ! bn(1:nbntri, 1:3nodes)
+
+  !   allocate(bn(nbntri, 3))
+  !   if (allocated(bntri2bntri) ) deallocate(bntri2bntri)
+  !   allocate(bntri2bntri(nbntri, 3))
+
+  !   ! extract "bntri" to a 2d array bn(1:nbntri, 1:3nodes)
+  !   ! for ease of work and readability
+  !   do i = 1, nbntri
+  !      i1 = 6*(i-1) + 1
+  !      i2 = 6*(i-1) + 3
+  !      bn(i , :) = bntri(i1:i2)
+  !   end do
+
+  !   ! now, proceed to fill the output bntri2bntri array
+  !   ! using "bn" array info
+  !   !
+  !   do i = 1, nbntri
+  !      bntri2bntri(i, 1) = find_tri_has(bn, i, (/ bn(i, 2), bn(i, 3) /) )
+  !      bntri2bntri(i, 2) = find_tri_has(bn, i, (/ bn(i, 3), bn(i, 1) /) )
+  !      bntri2bntri(i, 3) = find_tri_has(bn, i, (/ bn(i, 1), bn(i, 2) /) )
+  !   end do
+
+  !   ! clean ups
+  !   if ( allocated(bn) ) deallocate(bn)
+
+  !   ! done here
+
+  ! contains
+
+  !   function find_tri_has(bn, tri, edg)
+  !     implicit none
+  !     integer, dimension(:, :) , intent(in) :: bn
+  !     integer, intent(in) :: tri
+  !     integer, dimension(:), intent(in) :: edg
+  !     integer :: find_tri_has
+
+  !     ! local vars
+  !     integer :: i, j, cnt
+
+  !     ! init 
+  !     find_tri_has = -1 !not found= wall
+
+  !     do i = 1, size(bn, 1)
+
+  !        if ( i .eq. tri ) cycle
+
+  !        cnt = 0
+  !        do j = 1, 3
+  !           if ( any(bn(i, j) .eq. edg) ) cnt = cnt + 1
+  !        end do
+
+  !        if ( cnt .eq. 2) then
+  !           find_tri_has = i
+  !           exit
+  !        end if
+
+  !     end do
+
+  !     ! done here
+  !   end function find_tri_has
+
+  ! end subroutine find_bntri2bntri_map
+
+  ! subroutine find_node2bntri_map(nbntri, bntri, node2bntri)
+  !   implicit none
+  !   integer, intent(in) :: nbntri
+  !   integer, dimension(:), intent(in), target :: bntri
+  !   type(int_array), dimension(:) :: node2bntri
+
+  !   ! local vars
+  !   integer :: i, i1, i2, j
+  !   integer, pointer :: nodes(:) => null()
+
+  !   do i = 1, nbntri
+  !      i1 = 6*(i-1) + 1
+  !      i2 = 6*(i-1) + 3
+  !      nodes => bntri(i1:i2)
+  !      do j = 1, 3
+  !         call push_int_2_array(node2bntri(nodes(j))%val, i)
+  !      end do
+  !   end do
+
+  !   ! done here
+
+  ! contains
+
+  !   subroutine push_int_2_array(a, i)
+  !     implicit none
+  !     integer, dimension(:), allocatable :: a
+  !     integer, intent(in) :: i
+
+  !     ! local vars
+  !     integer :: n
+  !     integer, dimension(:), allocatable :: itmp
+
+  !     if ( .not. allocated(a) ) then
+  !        n = 1
+  !     else
+  !        n = size(a) + 1
+  !     end if
+
+  !     allocate(itmp(n))
+  !     if ( n > 1 ) itmp(1:(n-1)) = a(1:(n-1))
+  !     itmp(n) = i
+  !     call move_alloc(itmp, a)
+
+  !     ! clean
+  !     if ( allocated(itmp) ) deallocate(itmp)
+
+  !     ! done here
+  !   end subroutine push_int_2_array
+
+  ! end subroutine find_node2bntri_map
+
+  ! function is_tri_near_CAD_boundary(node2bntri, CAD_face, nodes)
+  !   implicit none
+  !   type(int_array), dimension(:), intent(in), target :: node2bntri
+  !   integer, dimension(:), intent(in) :: CAD_face, nodes
+  !   logical :: is_tri_near_CAD_boundary
+
+  !   ! local vars
+  !   integer :: inode, ref
+  !   integer, pointer :: cells(:) => null()
+
+  !   is_tri_near_CAD_boundary = .false.
+  !   ref = CAD_face(node2bntri(nodes(1))%val(1))
+
+  !   do inode = 1, size(nodes)
+  !      cells => node2bntri(nodes(inode))%val
+
+  !      if ( .not. all(ref .eq. CAD_face(cells)) ) then
+  !         is_tri_near_CAD_boundary = .true.
+  !         exit
+  !      end if
+  !   end do
+
+  !   ! done here
+  ! end function is_tri_near_CAD_boundary
 
 end module curved_tet
 
