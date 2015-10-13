@@ -43,6 +43,7 @@
 #include <BRepMesh_IncrementalMesh.hxx>
 #include "Poly_Triangulation.hxx"
 //#include <omp.h>
+#include "GeomAPI_ProjectPointOnSurf.hxx"
 
 //prototypes
 int init_bn_boxs(void);
@@ -53,6 +54,7 @@ int pt_in_box(int ii, const gp_Pnt& tpt);
 #define MY_MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MY_MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 #define TRI_QUERY_FAST
+// #define USE_SURF_ANALY
 
 //
 // Statically accessible vars and storage
@@ -303,7 +305,13 @@ extern "C" int find_pts_on_database(int npts, double *pts
     const TopoDS_Face& anFace = TopoDS::Face(anExp_static.Current());
     // get face as surface
     const Handle(Geom_Surface) &surface = BRep_Tool::Surface(anFace);
+
+#ifdef USE_SURF_ANALY
     ShapeAnalysis_Surface sas(surface);
+#else
+
+    GeomAPI_ProjectPointOnSurf projpnt;
+#endif
 
 // #pragma omp parallel for shared(found, uv, tol, pts, npts, anExp_static, ii, min_dist) private(pt_samp, pt_samp2, pt_uv, dist) firstprivate(sas) schedule(auto)
     for (indx = 0; indx < npts; indx++)
@@ -317,16 +325,35 @@ extern "C" int find_pts_on_database(int npts, double *pts
     // skip if out-of-bound for "ii"th CAD face
     if ( !pt_in_box(ii, pt_samp) ) continue;
 
+#ifdef USE_SURF_ANALY
     // find parameters uv of that point on the
     // given surface with the given tolerance
     pt_uv = sas.ValueOfUV(pt_samp, tol);
   
     //reevaluate the 3D coordinate of the point using surface parametrization 
     pt_samp2 = sas.Value(pt_uv.X(),pt_uv.Y());
+
+#else
+
+    // init again the orthogonal projection object
+    projpnt.Init(pt_samp, surface);
+    if ( projpnt.NbPoints() ) 
+      { 
+	pt_samp2 = projpnt.NearestPoint();
+	double au, av; //the u- and v-coordinates of the projected point
+	projpnt.LowerDistanceParameters(au, av); //get the nearest projection
+	pt_uv = gp_Pnt2d(au, av); //equivalent 2d description of pnt on surf
+      }
+    else
+      {
+	printf("Warning : in GeomAPI_ProjectPointOnSurf class, Init() yields zero NbPoints()!");  
+      }
+
+#endif
+
     dist = sqrt( (pt_samp2.X() - pt_samp.X()) * (pt_samp2.X() - pt_samp.X()) 
       + (pt_samp2.Y() - pt_samp.Y()) * (pt_samp2.Y() - pt_samp.Y()) 
       + (pt_samp2.Z() - pt_samp.Z()) * (pt_samp2.Z() - pt_samp.Z()));
-
 
     if ( dist <= min_dist[indx] ) // found! 
       {
