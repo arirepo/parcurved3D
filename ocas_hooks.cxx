@@ -54,13 +54,15 @@ int pt_in_box(int ii, const gp_Pnt& tpt);
 #define MY_MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MY_MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 #define TRI_QUERY_FAST
-// #define USE_SURF_ANALY
+#define USE_SURF_ANALY
 
 //
 // Statically accessible vars and storage
 //
 TopoDS_Shape sh_static;
 TopExp_Explorer anExp_static;
+int CURRENT_CAD_FACE_TAG = -1;
+gp_Pnt2d UVprev_stored;
 
 // The following is used to store bounding
 // box for each TopoDS face of CAD model.
@@ -583,6 +585,60 @@ extern "C" int xyz2uv(int CAD_face, double *xyz, double *uv, double tol)
   uv[0] = pt_uv.X();
   uv[1] = pt_uv.Y();
   
+  // done here!
+  return 0;
+}
+
+extern "C" int xyz2close_xyz(int CAD_face, double *xyz, double *close_xyz, double tol)
+{
+
+  gp_Pnt pt_samp, pt_samp2;
+  gp_Pnt2d pt_uv;
+  anExp_static.ReInit();
+
+  // go to that face sequntially 
+  for(int ii = 1; ii < CAD_face; ii++)
+    {
+      anExp_static.Next();
+    }
+
+  const TopoDS_Face& anFace = TopoDS::Face(anExp_static.Current());
+  // get face as surface
+  const Handle(Geom_Surface) &surface = BRep_Tool::Surface(anFace);
+  ShapeAnalysis_Surface sas(surface);
+
+  // fill the point object
+  pt_samp.SetX(xyz[0]);
+  pt_samp.SetY(xyz[1]);
+  pt_samp.SetZ(xyz[2]);
+
+  if ( CAD_face != CURRENT_CAD_FACE_TAG) //New UV required
+    {
+      // find parameters uv of that point on the
+      // given surface with the given tolerance
+      pt_uv = sas.ValueOfUV(pt_samp, tol);
+
+      // store this CAD face for next query to be fast
+      CURRENT_CAD_FACE_TAG = CAD_face;
+    }
+  else
+    {
+      // pt_uv = sas.NextValueOfUV (UVprev_stored, pt_samp, tol, 1.e-10);
+      // if not working, uncomment the following and comment the above
+      pt_uv = sas.ValueOfUV(pt_samp, tol);
+    }
+
+  // store current UV
+  UVprev_stored = pt_uv;
+
+  //reevaluate the 3D coordinate of the point using surface parametrization 
+  pt_samp2 = sas.Value(pt_uv.X(),pt_uv.Y());
+
+  // return the closest point (orthogonal projection)
+  close_xyz[0] = pt_samp2.X();
+  close_xyz[1] = pt_samp2.Y();
+  close_xyz[2] = pt_samp2.Z();
+
   // done here!
   return 0;
 }

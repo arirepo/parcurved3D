@@ -9,9 +9,9 @@ module curved_tet
 
   real*8, parameter :: Radius = 2.0d0
 
-  ! type int_array
-  !    integer, dimension(:), allocatable :: val
-  ! end type int_array
+  type int_array
+     integer, dimension(:), allocatable :: val
+  end type int_array
 
   public :: coord_tet, master2curved_tet
   public :: export_tet_face_curve, master2curved_edg_tet
@@ -399,7 +399,7 @@ contains
     integer :: nbntri
     integer, dimension(:), allocatable :: bntri
     ! integer, dimension(:, :), allocatable :: bntri2bntri
-    ! type(int_array), dimension(:), allocatable :: node2bntri
+    type(int_array), dimension(:), allocatable :: node2bntri
 
     real*8, allocatable :: uu(:, :)
 
@@ -414,7 +414,7 @@ contains
     integer, dimension(:, :), allocatable :: tet_shifted
     integer, dimension(:), allocatable :: tet2bn_tri
     ! integer :: neigh_CAD_face(3)
-    ! logical :: is_CAD_bn_tri
+    logical :: is_CAD_bn_tri
 
     ! master element data struct
     integer :: dd, indx, CAD_face
@@ -452,8 +452,8 @@ contains
     !    stop
     ! end if
 
-    ! allocate(node2bntri(size(xf, 2)))
-    ! call find_node2bntri_map(nbntri = nbntri, bntri = bntri, node2bntri = node2bntri)
+    allocate(node2bntri(size(xf, 2)))
+    call find_node2bntri_map(nbntri = nbntri, bntri = bntri, node2bntri = node2bntri)
 
 
     ! export linear tetmesh
@@ -540,8 +540,8 @@ contains
        ! ! triangle. 
        ! neigh_CAD_face = cent_cad_found(bntri2bntri(tet2bn_tri(ii), :))
 
-       ! is_CAD_bn_tri = is_tri_near_CAD_boundary(node2bntri = node2bntri &
-       !      , CAD_face = cent_cad_found, nodes = tet_shifted(ii, 1:3))
+       is_CAD_bn_tri = is_tri_near_CAD_boundary(node2bntri = node2bntri &
+            , CAD_face = cent_cad_found, nodes = tet_shifted(ii, 1:3))
 
        do jj = 1, size(rr)
           ! call master2curved_tet( r = r(i), s = s(i), t = t(i), uv = uv &
@@ -556,10 +556,17 @@ contains
              !      , uv = uv, xA = xA, x = xx(jj), y = yy(jj), z = zz(jj))
 
           ! else
+          if ( .not.  is_CAD_bn_tri) then
+             call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
+                  , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj), z = zz(jj) &
+                  , CAD_face_input = CAD_face)
+
+          else
 
              call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
                   , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj), z = zz(jj))
 
+          end if
           ! end if
 
        end do
@@ -946,13 +953,14 @@ contains
     ! done here
   end subroutine master2curved_tet_ocas
 
-  subroutine master2curved_tet_ocas_close(r,s,t, xbot, xA, tol, x, y, z)
+  subroutine master2curved_tet_ocas_close(r,s,t, xbot, xA, tol, x, y, z, CAD_face_input)
     implicit none
     real*8, intent(in) :: r, s, t
     real*8, dimension(:, :), intent(in) :: xbot
     real*8, dimension(:), intent(in) :: xA
     real*8, intent(in) :: tol
     real*8, intent(out) :: x, y, z
+    integer, intent(in), optional :: CAD_face_input
 
     ! local vars
     integer :: ii, CAD_face(1)
@@ -982,13 +990,21 @@ contains
     ! compute surface points
     ! call Suv(u = uv_fin(1), v= uv_fin(2), S = Sf)
     ! call Suv_ocas(uv = uv_fin, CAD_face = CAD_face, S = Sf)
-    call find_pts_on_database_f90(npts = 1, pts = xbot_fin, found = CAD_face, uv = uvout, tol = tol)
-    if ( CAD_face(1) .eq. -1 ) then
-       print *, 'CAD_face .eq. -1 in master2curved_tet_ocas_close(...)! increase tolerance! stop'
-       stop
-    end if
+    if ( .not. present(CAD_face_input) ) then
+       ! ! WORKING
+       call find_pts_on_database_f90(npts = 1, pts = xbot_fin, found = CAD_face, uv = uvout, tol = tol)
+       if ( CAD_face(1) .eq. -1 ) then
+          print *, 'CAD_face .eq. -1 in master2curved_tet_ocas_close(...)! increase tolerance! stop'
+          stop
+       end if
 
-    call uv2xyz_f90(CAD_face = CAD_face(1), uv = uvout, xyz = Sf)
+       call uv2xyz_f90(CAD_face = CAD_face(1), uv = uvout, xyz = Sf)
+       ! ! END WORKING
+    else
+
+       call xyz2close_xyz_f90(CAD_face = CAD_face_input, xyz = xbot_fin, close_xyz = Sf, tol = tol)
+
+    end if
 
     xf = alpha * xA + (1.0d0 - alpha) * Sf
 
@@ -1071,81 +1087,81 @@ contains
 
   ! end subroutine find_bntri2bntri_map
 
-  ! subroutine find_node2bntri_map(nbntri, bntri, node2bntri)
-  !   implicit none
-  !   integer, intent(in) :: nbntri
-  !   integer, dimension(:), intent(in), target :: bntri
-  !   type(int_array), dimension(:) :: node2bntri
+  subroutine find_node2bntri_map(nbntri, bntri, node2bntri)
+    implicit none
+    integer, intent(in) :: nbntri
+    integer, dimension(:), intent(in), target :: bntri
+    type(int_array), dimension(:) :: node2bntri
 
-  !   ! local vars
-  !   integer :: i, i1, i2, j
-  !   integer, pointer :: nodes(:) => null()
+    ! local vars
+    integer :: i, i1, i2, j
+    integer, pointer :: nodes(:) => null()
 
-  !   do i = 1, nbntri
-  !      i1 = 6*(i-1) + 1
-  !      i2 = 6*(i-1) + 3
-  !      nodes => bntri(i1:i2)
-  !      do j = 1, 3
-  !         call push_int_2_array(node2bntri(nodes(j))%val, i)
-  !      end do
-  !   end do
+    do i = 1, nbntri
+       i1 = 6*(i-1) + 1
+       i2 = 6*(i-1) + 3
+       nodes => bntri(i1:i2)
+       do j = 1, 3
+          call push_int_2_array(node2bntri(nodes(j))%val, i)
+       end do
+    end do
 
-  !   ! done here
+    ! done here
 
-  ! contains
+  contains
 
-  !   subroutine push_int_2_array(a, i)
-  !     implicit none
-  !     integer, dimension(:), allocatable :: a
-  !     integer, intent(in) :: i
+    subroutine push_int_2_array(a, i)
+      implicit none
+      integer, dimension(:), allocatable :: a
+      integer, intent(in) :: i
 
-  !     ! local vars
-  !     integer :: n
-  !     integer, dimension(:), allocatable :: itmp
+      ! local vars
+      integer :: n
+      integer, dimension(:), allocatable :: itmp
 
-  !     if ( .not. allocated(a) ) then
-  !        n = 1
-  !     else
-  !        n = size(a) + 1
-  !     end if
+      if ( .not. allocated(a) ) then
+         n = 1
+      else
+         n = size(a) + 1
+      end if
 
-  !     allocate(itmp(n))
-  !     if ( n > 1 ) itmp(1:(n-1)) = a(1:(n-1))
-  !     itmp(n) = i
-  !     call move_alloc(itmp, a)
+      allocate(itmp(n))
+      if ( n > 1 ) itmp(1:(n-1)) = a(1:(n-1))
+      itmp(n) = i
+      call move_alloc(itmp, a)
 
-  !     ! clean
-  !     if ( allocated(itmp) ) deallocate(itmp)
+      ! clean
+      if ( allocated(itmp) ) deallocate(itmp)
 
-  !     ! done here
-  !   end subroutine push_int_2_array
+      ! done here
+    end subroutine push_int_2_array
 
-  ! end subroutine find_node2bntri_map
+  end subroutine find_node2bntri_map
 
-  ! function is_tri_near_CAD_boundary(node2bntri, CAD_face, nodes)
-  !   implicit none
-  !   type(int_array), dimension(:), intent(in), target :: node2bntri
-  !   integer, dimension(:), intent(in) :: CAD_face, nodes
-  !   logical :: is_tri_near_CAD_boundary
+  function is_tri_near_CAD_boundary(node2bntri, CAD_face, nodes)
+    implicit none
+    type(int_array), dimension(:), intent(in), target :: node2bntri
+    integer, dimension(:), intent(in) :: CAD_face, nodes
+    logical :: is_tri_near_CAD_boundary
 
-  !   ! local vars
-  !   integer :: inode, ref
-  !   integer, pointer :: cells(:) => null()
+    ! local vars
+    integer :: inode, ref
+    integer, pointer :: cells(:) => null()
 
-  !   is_tri_near_CAD_boundary = .false.
-  !   ref = CAD_face(node2bntri(nodes(1))%val(1))
+    is_tri_near_CAD_boundary = .false.
+    ref = CAD_face(node2bntri(nodes(1))%val(1))
 
-  !   do inode = 1, size(nodes)
-  !      cells => node2bntri(nodes(inode))%val
+    do inode = 1, size(nodes)
+       cells => node2bntri(nodes(inode))%val
 
-  !      if ( .not. all(ref .eq. CAD_face(cells)) ) then
-  !         is_tri_near_CAD_boundary = .true.
-  !         exit
-  !      end if
-  !   end do
+       if ( .not. all(ref .eq. CAD_face(cells)) ) then
+          is_tri_near_CAD_boundary = .true.
+          exit
+       end if
+    end do
 
-  !   ! done here
-  ! end function is_tri_near_CAD_boundary
+    ! done here
+  end function is_tri_near_CAD_boundary
 
 end module curved_tet
 
@@ -1160,21 +1176,21 @@ program tester
   !
   ! call tester1()
 
-  ! nhole = 1
-  ! allocate(xh(3))
-  ! xh = (/ 0.5714d0, 0.4333d0, 0.1180d0 /)
-
-  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-  !      , facet_file = 'missile_spect3.facet' &
-  !      , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0)
-
   nhole = 1
   allocate(xh(3))
-  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+  xh = (/ 0.5714d0, 0.4333d0, 0.1180d0 /)
 
-  call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
-       , facet_file = 'civil3.facet' &
-       , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0)
+  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+       , facet_file = 'missile_spect3.facet' &
+       , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0)
+
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+
+  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
+  !      , facet_file = 'civil3.facet' &
+  !      , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0)
 
   ! nhole = 1
   ! allocate(xh(3))
