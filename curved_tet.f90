@@ -224,6 +224,7 @@ contains
     print *, 'writing to Tecplot ...'
     allocate(uu(1, npts))
     uu = 1.0d0
+
     call write_u_tecplot_tet(meshnum=meshnum, outfile=fname &
          , x = xf, icon = tetcon, u = uu &
          , appendit = append_it, is_active = is_active)
@@ -412,15 +413,14 @@ contains
     integer, allocatable :: cent_cad_found(:) !nbntri
     real*8, allocatable :: uvc(:)
     integer, dimension(:, :), allocatable :: tet_shifted
-    integer, dimension(:), allocatable :: tet2bn_tri
+    integer, dimension(:), allocatable :: tet2bn_tri, tet_type
     ! integer :: neigh_CAD_face(3)
     logical :: is_CAD_bn_tri
 
     ! master element data struct
     integer :: dd, indx, CAD_face
     real*8, dimension(:), allocatable :: rr, ss, tt, xx, yy, zz
-    real*8, dimension(3) :: xA, x3, x4
-    real*8, dimension(2, 3) :: uv
+    real*8, dimension(3) :: xA
     real*8, dimension(3, 3) :: xbot
 
     ! visualization data struct
@@ -501,13 +501,11 @@ contains
     ! before we apply our analytical transformation
     !
     allocate( tet_shifted(size(tetcon, 1), size(tetcon, 2)) )
-    allocate( tet2bn_tri(size(tetcon, 1)) )
+    allocate( tet2bn_tri(size(tetcon, 1)), tet_type(size(tetcon, 1)) )
     call shift_tetcon(nbntri = nbntri, bntri = bntri &
-         , tetcon = tetcon, tetcon2 = tet_shifted, tet2bn_tri = tet2bn_tri)
- 
-    ! print *, 'tet2bn_tri = ', tet2bn_tri
-    ! /////////
-    ! /////////
+         , tetcon = tetcon, tetcon2 = tet_shifted, tet2bn_tri = tet2bn_tri &
+         , tet_type = tet_type, cent_cad_found = cent_cad_found)
+
     ! generate the lagrangian tet. interpolation points
     dd = 6
     indx = 1
@@ -515,68 +513,86 @@ contains
     allocate(xx(size(rr)), yy(size(rr)), zz(size(rr))) 
 
     ! map one face curved tets
-    do ii = 1, size(tet2bn_tri)
-       if ( tet2bn_tri(ii) .eq. -1 ) cycle !interior tet
-       ! 
-       CAD_face = cent_cad_found(tet2bn_tri(ii))
-       ! print *, 'CAD_face =' , CAD_face
-       if ( CAD_face .eq. -1 ) cycle !bn tet not on CAD database
+    main_loop:    do ii = 1, size(tetcon, 1)
 
-       !
+
+       ! pick the appex of the tet required for some mappings
        xA = xf(:, tet_shifted(ii, 4))
-
-       ! compute local uv on that face
-       do jj = 1, 3
-          call xyz2uv_f90(CAD_face = CAD_face &
-               , xyz = xf(:, tet_shifted(ii, jj)), uv = uv(:,jj), tol = 1.0d-6)
-       end do
 
        ! compute xbot
        do jj = 1, 3
           xbot(:, jj) = xf(:, tet_shifted(ii, jj))
        end do
 
-       ! ! compute the CAD face tag of the neighbors to this boundary
-       ! ! triangle. 
-       ! neigh_CAD_face = cent_cad_found(bntri2bntri(tet2bn_tri(ii), :))
-
-       is_CAD_bn_tri = is_tri_near_CAD_boundary(node2bntri = node2bntri &
-            , CAD_face = cent_cad_found, nodes = tet_shifted(ii, 1:3))
-
-       do jj = 1, size(rr)
-          ! call master2curved_tet( r = r(i), s = s(i), t = t(i), uv = uv &
-          !      , xA = xA, x = x(i), y = y(i), z = z(i) )
-
-          ! if ( all(neigh_CAD_face(1) .eq. neigh_CAD_face) ) then
-
-          ! if ( .not.  is_CAD_bn_tri) then
-
-             ! call master2curved_tet_ocas(CAD_face = CAD_face &
-             !      , r = rr(jj),s = ss(jj),t = tt(jj) &
-             !      , uv = uv, xA = xA, x = xx(jj), y = yy(jj), z = zz(jj))
-
-          ! else
-          if ( .not.  is_CAD_bn_tri) then
-             call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
-                  , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj), z = zz(jj) &
-                  , CAD_face_input = CAD_face)
-
-          else
-
-             call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
-                  , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj), z = zz(jj))
-
-          end if
-          ! end if
-
-       end do
-
-
-       ! export the generated curved element
        ! fill this tet coords
        do jj = 1, 4
-          xtet(:, jj) = xf(:, tetcon(ii,jj))
+          xtet(:, jj) = xf(:, tet_shifted(ii,jj))
        end do
+
+       select case ( tet_type(ii) )
+
+       case ( 0 ) ! interior, use linear (straight map)
+
+          do jj = 1, size(rr)
+             call master2curved_tet_straight(r= rr(jj),s = ss(jj),t= tt(jj) &
+                  , xbot = xbot, xA = xA, x = xx(jj), y = yy(jj), z = zz(jj))
+          end do
+
+       case ( 1 ) ! one face (tri) of the tet on CAD boundary
+
+          ! bullet proofing ...
+          if ( tet2bn_tri(ii) .eq. -1 ) then
+             print *, 'This tet is supposed to be one-face-bn' &
+                  , ' tet but is NOT! stop'
+             stop
+          end if
+
+          ! 
+          CAD_face = cent_cad_found(tet2bn_tri(ii))
+          ! bullet proofing ...
+          if ( CAD_face .eq. -1 ) then !bn tet not on CAD database 
+             print *, 'this boundary-face tet has a CAD face' &
+                  , ' tag equal to -1! stop'
+             stop
+          end if
+
+
+          is_CAD_bn_tri = is_tri_near_CAD_boundary(node2bntri = node2bntri &
+               , CAD_face = cent_cad_found, nodes = tet_shifted(ii, 1:3))
+
+          do jj = 1, size(rr)
+
+             if ( .not.  is_CAD_bn_tri) then
+                call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
+                     , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj), z = zz(jj) &
+                     , CAD_face_input = CAD_face)
+
+             else
+
+                call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
+                     , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj), z = zz(jj))
+
+             end if
+
+          end do
+
+
+       case (2) ! one-edge-curved-on-CAD tet
+
+
+          do jj = 1, size(rr)
+             call master2curved_edg_tet_ocas_close(r= rr(jj),s= ss(jj),t= tt(jj) &
+                  , xyz = xtet, x = xx(jj), y = yy(jj), z = zz(jj), tol = tol)
+          end do
+
+       case default
+
+          print *, 'unknown tet_type happened! stop'
+          stop
+
+       end select
+
+       ! export the generated curved element
        call tetrahedron_edge_length ( tetra = xtet, edge_length = lens)
        ref_length = 1.5d0 * maxval(lens) / dble(dd)
 
@@ -594,11 +610,8 @@ contains
 
        print *, 'indx = ', indx
 
-    end do
+    end do main_loop
 
-    ! map one edge curved tets
-
-    ! map linear tets
 
 
     ! clean ups
@@ -608,6 +621,29 @@ contains
     if ( allocated(tetcon) ) deallocate(tetcon)
     if ( allocated(neigh) ) deallocate(neigh)
     if ( allocated(bntri) ) deallocate(bntri)
+
+    do jj = 1, size(node2bntri)
+       if ( allocated(node2bntri(jj)%val) ) deallocate(node2bntri(jj)%val)
+    end do
+    if ( allocated(node2bntri) ) deallocate(node2bntri)
+
+    if ( allocated(uu) ) deallocate(uu)
+    if ( allocated(xadj) ) deallocate(xadj)
+    if ( allocated(adj) ) deallocate(adj)
+    if ( allocated(vwgt) ) deallocate(vwgt)
+    if ( allocated(part) ) deallocate(part)
+    if ( allocated(vis_mask) ) deallocate(vis_mask)
+    if ( allocated(cent_cad_found) ) deallocate(cent_cad_found)
+    if ( allocated(uvc) ) deallocate(uvc)
+    if ( allocated(tet_shifted) ) deallocate(tet_shifted)
+    if ( allocated(tet2bn_tri) ) deallocate(tet2bn_tri)
+    if ( allocated(tet_type) ) deallocate(tet_type)
+    if ( allocated(rr) ) deallocate(rr)
+    if ( allocated(ss) ) deallocate(ss)
+    if ( allocated(tt) ) deallocate(tt)
+    if ( allocated(xx) ) deallocate(xx)
+    if ( allocated(yy) ) deallocate(yy)
+    if ( allocated(zz) ) deallocate(zz)
 
     ! done here
   end subroutine curved_tetgen_geom
@@ -770,22 +806,30 @@ contains
   end subroutine call_metis_graph_parti
 
   !
-  subroutine shift_tetcon(nbntri, bntri, tetcon, tetcon2, tet2bn_tri)
+  subroutine shift_tetcon(nbntri, bntri, tetcon, tetcon2, tet2bn_tri, tet_type, cent_cad_found)
     implicit none
     integer, intent(in) :: nbntri
     integer, dimension(:), intent(in), target :: bntri
     integer, dimension(:, :), intent(in) :: tetcon
     integer, dimension(:, :), intent(out) :: tetcon2
-    integer, dimension(:), intent(out) :: tet2bn_tri
+    integer, dimension(:), intent(out) :: tet2bn_tri, tet_type
+    integer, dimension(:), intent(in) :: cent_cad_found
 
     ! local vars
-    integer :: ii, i1, i2, tetnum
+    integer :: ii, i1, i2, tetnum, jj, kk
     integer, dimension(:), pointer :: pts => null(), tets_on_face => null()
+    integer :: edg(2)
+    integer, allocatable :: tets(:)
 
     ! init
     tet2bn_tri = -1
+    tet_type = 0 ! default interior
+    tetcon2 = tetcon
 
+    ! shift the tets that have one face on CAD boundary
     do ii = 1, nbntri
+
+       if ( cent_cad_found(ii) .eq. -1 ) cycle
 
        i1 = 6* (ii-1) + 1
        i2 = 6* (ii-1) + 3
@@ -800,9 +844,7 @@ contains
        tetnum = maxval(tets_on_face)
 
        tet2bn_tri(tetnum) = ii
-
-       ! print *, '***bntri = ', ii, 'bn_pts = ', pts, 'tet_pts = ', tetcon(tetnum, :)
-       ! print *, 'results = ', a_in_b(a = pts, b = tetcon(tetnum, 1:3))
+       tet_type(tetnum) = 1 ! one face on CAD
 
        ! bullet proofing ...
        if ( .not. a_in_b(a = pts, b = tetcon(tetnum, :)) ) then
@@ -813,12 +855,38 @@ contains
        !
        call shift_tet_to_bn_tri(tet0 = tetcon(tetnum, :), tri = pts &
             , tet = tetcon2(tetnum, :))
+    end do
 
-!        print *, 'tetcon2 = ', tetcon2(tetnum, :)
-! if ( any ( tetcon2(tetnum, :) .ne. tetcon(tetnum, :) ) .and. a_in_b(a = pts, b = tetcon(tetnum, 1:3)) ) then
-! print *, 'BADDDDDDDDD'
-! stop
-! end if
+    ! shift tets that have one edge on the CAD boundary
+    do ii = 1, nbntri
+
+       if ( cent_cad_found(ii) .eq. -1 ) cycle
+
+       i1 = 6* (ii-1) + 1
+       i2 = 6* (ii-1) + 3
+
+       pts => bntri(i1:i2)  
+
+
+       do jj = 1, 3
+
+          if ( jj < 3 ) then
+             edg = (/ pts(jj+1), pts(jj) /)
+          else
+             edg = (/ pts(1), pts(3) /)
+          end if
+
+          call tets_cont_edge(tetcon = tetcon, edg = edg, tets = tets)
+
+          do kk = 1, size(tets)
+             if (tet_type(tets(kk)) .eq. 0 ) then
+                tet_type(tets(kk)) = 2 ! one edge on CAD
+
+                call shift_tet_to_edg_on_bn(tet0 = tetcon(tets(kk), :), edg =  edg&
+                     , tet = tetcon2(tets(kk), :))
+             end if
+          end do
+       end do
 
     end do
 
@@ -895,6 +963,62 @@ contains
 
     ! done here
   end subroutine shift_tet_to_bn_tri
+
+  ! tetrahedrals containing the edge
+  subroutine tets_cont_edge(tetcon, edg, tets)
+    implicit none
+    integer, dimension(:, :), intent(in) :: tetcon
+    integer, dimension(:), intent(in) :: edg !(1:2)
+    integer, dimension(:), allocatable :: tets 
+
+    ! local vars
+    integer :: i
+
+    ! bullet proofing
+    if ( allocated(tets) ) deallocate(tets)
+
+    do i = 1, size(tetcon, 1)
+
+       if ( a_in_b(edg, tetcon(i, :)) ) then
+
+          call push_int_2_array(a = tets, i = i)
+
+       end if
+
+    end do
+
+    ! done here
+  end subroutine tets_cont_edge
+
+  !
+  subroutine shift_tet_to_edg_on_bn(tet0, edg, tet)
+    implicit none
+    integer, dimension(:), intent(in) :: tet0, edg
+    integer, dimension(:), intent(out) :: tet
+
+    ! local vars
+    integer :: i, indx, others(2)
+
+    indx = 1
+    do i = 1, 4
+       if ( all(tet0(i) .ne. edg) ) then
+          others(indx) = tet0(i)
+          indx = indx + 1
+       end if
+       if ( indx .eq. 3 ) exit
+    end do
+
+    ! bullet proofing ...
+    if ( indx .ne. 3 ) then
+       print *, 'this edg in not in the given tet! stop'
+       stop
+    end if
+
+    ! rearrange them in correct format
+    tet = (/ edg, others /) 
+
+    ! done here
+  end subroutine shift_tet_to_edg_on_bn
 
   subroutine Suv_ocas(uv, CAD_face, S)
     implicit none
@@ -1107,36 +1231,33 @@ contains
     end do
 
     ! done here
-
-  contains
-
-    subroutine push_int_2_array(a, i)
-      implicit none
-      integer, dimension(:), allocatable :: a
-      integer, intent(in) :: i
-
-      ! local vars
-      integer :: n
-      integer, dimension(:), allocatable :: itmp
-
-      if ( .not. allocated(a) ) then
-         n = 1
-      else
-         n = size(a) + 1
-      end if
-
-      allocate(itmp(n))
-      if ( n > 1 ) itmp(1:(n-1)) = a(1:(n-1))
-      itmp(n) = i
-      call move_alloc(itmp, a)
-
-      ! clean
-      if ( allocated(itmp) ) deallocate(itmp)
-
-      ! done here
-    end subroutine push_int_2_array
-
   end subroutine find_node2bntri_map
+
+  subroutine push_int_2_array(a, i)
+    implicit none
+    integer, dimension(:), allocatable :: a
+    integer, intent(in) :: i
+
+    ! local vars
+    integer :: n
+    integer, dimension(:), allocatable :: itmp
+
+    if ( .not. allocated(a) ) then
+       n = 1
+    else
+       n = size(a) + 1
+    end if
+
+    allocate(itmp(n))
+    if ( n > 1 ) itmp(1:(n-1)) = a(1:(n-1))
+    itmp(n) = i
+    call move_alloc(itmp, a)
+
+    ! clean
+    if ( allocated(itmp) ) deallocate(itmp)
+
+    ! done here
+  end subroutine push_int_2_array
 
   function is_tri_near_CAD_boundary(node2bntri, CAD_face, nodes)
     implicit none
@@ -1162,6 +1283,111 @@ contains
 
     ! done here
   end function is_tri_near_CAD_boundary
+
+  subroutine master2curved_edg_tet_ocas_close(r,s,t, xyz, x, y, z, tol)
+    implicit none
+    real*8, intent(in) :: r, s, t
+    real*8, dimension(:, :), intent(in) :: xyz
+    real*8, intent(out) :: x, y, z
+    real*8, intent(in) :: tol
+
+    ! local vars
+    real*8 :: u, v, alpha, u0
+    real*8, dimension(3) :: Sf, xf, Sc
+    !
+    real*8, dimension(3) :: xyz_fin, x1, x2, x3, x4 
+    integer :: CAD_face(1)
+    real*8 :: uvout(2)
+
+    ! init
+    x1 = xyz(:,1)
+    x2 = xyz(:,2)
+    x3 = xyz(:,3)
+    x4 = xyz(:,4)
+
+    if ( abs(t - 1.0d0) <= 1.0d-15 ) then
+       u = r ! simple
+       v = s ! simple
+    else 
+       u = r/(1-t)
+       v = s/(1-t)
+    end if
+    alpha = t
+
+    ! compute final uv
+    if ( abs(v - 1.0d0) <= 1.0d-15 ) then
+       u0 = u ! simple
+    else 
+       u0 = u/(1-v)
+    end if
+
+    ! uv_fin = uv(:, 1) + u0 * (uv(:, 2) - uv(:, 1)) 
+    xyz_fin = x1 + u0 * (x2 - x1) 
+
+    call find_pts_on_database_f90(npts = 1, pts = xyz_fin, found = CAD_face, uv = uvout, tol = tol)
+    if ( CAD_face(1) .eq. -1 ) then
+       print *, 'CAD_face .eq. -1 in master2curved_edg_tet_ocas_close(...)! increase tolerance! stop'
+       stop
+    end if
+
+    call uv2xyz_f90(CAD_face = CAD_face(1), uv = uvout, xyz = Sc)
+
+    ! ! compute surface points
+    ! call Suv(u = uv_fin(1), v= uv_fin(2), S = Sc)
+
+    Sf = v * x3 + (1.0d0 - v) * Sc
+
+    xf = alpha * x4 + (1.0d0 - alpha) * Sf
+
+    x = xf(1)
+    y = xf(2)
+    z = xf(3)
+
+    ! done here
+  end subroutine master2curved_edg_tet_ocas_close
+
+  subroutine master2curved_tet_straight(r,s,t, xbot, xA, x, y, z)
+    implicit none
+    real*8, intent(in) :: r, s, t
+    real*8, dimension(:, :), intent(in) :: xbot
+    real*8, dimension(:), intent(in) :: xA
+    real*8, intent(out) :: x, y, z
+
+    ! local vars
+    integer :: ii
+    real*8 :: u, v, alpha
+    real*8, dimension(3) :: Sf, xf, xbot_fin
+    !
+    real*8 :: val   ! the value of basis  
+    real*8, dimension(2) :: der  
+
+
+    if ( abs(t - 1.0d0) <= 1.0d-15 ) then
+       u = r ! simple
+       v = s ! simple
+    else 
+       u = r/(1-t)
+       v = s/(1-t)
+    end if
+    alpha = t
+
+    ! compute final xbot
+    xbot_fin = 0.0d0
+    do ii = 1, 3
+       call psi(etype = 1, i = ii, r = u, s = v, val = val, der = der)
+       xbot_fin = xbot_fin + val * xbot(:, ii)
+    end do
+
+    Sf = xbot_fin
+
+    xf = alpha * xA + (1.0d0 - alpha) * Sf
+
+    x = xf(1)
+    y = xf(2)
+    z = xf(3)
+
+    ! done here
+  end subroutine master2curved_tet_straight
 
 end module curved_tet
 
