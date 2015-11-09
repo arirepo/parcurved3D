@@ -549,7 +549,7 @@ contains
          , bntri = bntri, xf = xf, cent_cad_found = cent_cad_found &
          , uvc = uvc, tol = tol)
 
-if ( 1 .eq. 0 ) then
+
     ! prepare the output file name
     write (outname, "(A7,I0.3,A4)") "grdPART", tmpi%rank, ".tec"
 
@@ -563,6 +563,7 @@ if ( 1 .eq. 0 ) then
     call shift_tetcon(nbntri = nbntri, bntri = bntri &
          , tetcon = tetcon, tetcon2 = tet_shifted, tet2bn_tri = tet2bn_tri &
          , tet_type = tet_type, cent_cad_found = cent_cad_found)
+
 
     ! setup vars for domain decomposition using METIS
     nparts = tmpi%np
@@ -743,7 +744,6 @@ if ( 1 .eq. 0 ) then
     if ( allocated(yy) ) deallocate(yy)
     if ( allocated(zz) ) deallocate(zz)
 
-end if ! 1==0
     ! done here
   end subroutine curved_tetgen_geom
 
@@ -941,6 +941,11 @@ end if ! 1==0
        tets_on_face => bntri(i1:i2)
 
        tetnum = maxval(tets_on_face)
+       if ( tetnum > size(tetcon, 1) ) tetnum = minval(tets_on_face)
+       if ( tetnum <= 0 ) then
+          print *, 'fatal; tetnum <= 0. stop'
+          stop
+       end if
 
        tet2bn_tri(tetnum) = ii
        tet_type(tetnum) = 1 ! one face on CAD
