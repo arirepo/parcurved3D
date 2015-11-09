@@ -441,7 +441,7 @@ contains
     character(len = 128) :: outname
 
     ! MPI data struct
-    integer, parameter :: root_rank = 0
+    integer :: size_arr_on_root(2), len_bntri(1)
 
     ! read the facet file
     print *, 'starting curved tetrahedral mesh generator'
@@ -452,16 +452,74 @@ contains
     ! !
     ! ! generic tetmesher subroutine
     ! !
-    if ( tmpi%rank .eq. root_rank ) then
+    if ( tmpi%rank .eq. tmpi%root_rank ) then
        print *, 'generating initial tetmesh of whole domain ...'
        call tetmesh(tetgen_cmd, npts, x, nquad, ntri, icontag, nhole, xh &
             , xf, tetcon, neigh, nbntri, bntri)
        print *, 'initial tetmesh is done!'
     end if
 
-    ! Broadcast the generated grid info
 
-if ( 1 .eq. 0 ) then
+
+    ! Broadcast the generated grid info
+    !
+    ! xf
+    ! first pack the size info
+    if ( tmpi%rank .eq. tmpi%root_rank ) then
+       size_arr_on_root = (/ size(xf, 1), size(xf, 2) /)
+    end if
+    call tmpi%bcast_int(size_arr_on_root)
+    ! then bcast the data
+    if ( tmpi%rank .ne. tmpi%root_rank ) then
+       allocate(xf(size_arr_on_root(1), size_arr_on_root(2)))
+    end if
+    do ii = 1, 3
+       call tmpi%bcast_double(xf(ii, :))
+    end do
+
+    ! tetcon
+    ! first pack the size info
+    if ( tmpi%rank .eq. tmpi%root_rank ) then
+       size_arr_on_root = (/ size(tetcon, 1), size(tetcon, 2) /)
+    end if
+    call tmpi%bcast_int(size_arr_on_root)
+    ! then bcast the data
+    if ( tmpi%rank .ne. tmpi%root_rank ) then
+       allocate(tetcon(size_arr_on_root(1), size_arr_on_root(2)))
+    end if
+    do jj = 1, 4
+       call tmpi%bcast_int(tetcon(:, jj))
+    end do
+
+    ! neigh
+    ! first pack the size info
+    if ( tmpi%rank .eq. tmpi%root_rank ) then
+       size_arr_on_root = (/ size(neigh, 1), size(neigh, 2) /)
+    end if
+    call tmpi%bcast_int(size_arr_on_root)
+    ! then bcast the data
+    if ( tmpi%rank .ne. tmpi%root_rank ) then
+       allocate(neigh(size_arr_on_root(1), size_arr_on_root(2)))
+    end if
+    do jj = 1, 4
+       call tmpi%bcast_int(neigh(:, jj))
+    end do
+
+    ! bntri
+    ! first pack the size info
+    if ( tmpi%rank .eq. tmpi%root_rank ) len_bntri(1) = nbntri
+    call tmpi%bcast_int(len_bntri)
+    nbntri = len_bntri(1)
+    if ( tmpi%rank .eq. tmpi%root_rank ) len_bntri(1) = size(bntri)
+    call tmpi%bcast_int(len_bntri)
+    ! alloc.
+    if ( tmpi%rank .ne. tmpi%root_rank ) then
+       allocate(bntri(len_bntri(1)))
+    end if
+
+    ! then bcast the data
+    call tmpi%bcast_int(bntri)
+
 
     ! ! find the boundary tri connectivity map
     ! ! useful for speedup the code when deciding on
@@ -491,6 +549,7 @@ if ( 1 .eq. 0 ) then
          , bntri = bntri, xf = xf, cent_cad_found = cent_cad_found &
          , uvc = uvc, tol = tol)
 
+if ( 1 .eq. 0 ) then
     ! prepare the output file name
     write (outname, "(A7,I0.3,A4)") "grdPART", tmpi%rank, ".tec"
 

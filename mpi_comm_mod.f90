@@ -16,6 +16,7 @@ module mpi_comm_mod
 
   type, public :: mpi_comm_t
 
+     integer :: root_rank = 0
      integer :: comm_w = MPI_COMM_WORLD
      integer :: mpi_error = MPI_SUCCESS, mpi_stat(MPI_STATUS_SIZE)
      integer :: rank, np
@@ -29,6 +30,8 @@ module mpi_comm_mod
      procedure :: finish => mpi_comm_final
      procedure :: send_double => mpi_comm_send_double
      procedure :: recv_double => mpi_comm_recv_double
+     procedure :: bcast_int => mpi_comm_bcast_integer
+     procedure :: bcast_double => mpi_comm_bcast_double
 
   end type mpi_comm_t
 
@@ -138,6 +141,34 @@ contains
 
     ! done here
   end subroutine mpi_comm_recv_double
+
+  !
+  subroutine mpi_comm_bcast_integer(this, buff)
+    implicit none
+    class(mpi_comm_t), intent(inout) :: this
+    integer, dimension(:) :: buff
+
+    call MPI_BCAST(buff, size(buff), MPI_INT, this%root_rank &
+         , this%comm_w, this%mpi_error)
+
+    call this%error_check('bcast_integer')
+
+    ! done here
+  end subroutine mpi_comm_bcast_integer
+
+  !
+  subroutine mpi_comm_bcast_double(this, buff)
+    implicit none
+    class(mpi_comm_t), intent(inout) :: this
+    real*8, dimension(:) :: buff
+
+    call MPI_BCAST(buff, size(buff), MPI_DOUBLE, this%root_rank &
+         , this%comm_w, this%mpi_error)
+
+    call this%error_check('bcast_double')
+
+    ! done here
+  end subroutine mpi_comm_bcast_double
 
 end module mpi_comm_mod
 
