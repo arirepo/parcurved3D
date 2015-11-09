@@ -441,7 +441,7 @@ contains
     character(len = 128) :: outname
 
     ! MPI data struct
-
+    integer, parameter :: root_rank = 0
 
     ! read the facet file
     print *, 'starting curved tetrahedral mesh generator'
@@ -452,10 +452,16 @@ contains
     ! !
     ! ! generic tetmesher subroutine
     ! !
-    print *, 'generating initial tetmesh of whole domain ...'
-    call tetmesh(tetgen_cmd, npts, x, nquad, ntri, icontag, nhole, xh &
-         , xf, tetcon, neigh, nbntri, bntri)
-    print *, 'initial tetmesh is done!'
+    if ( tmpi%rank .eq. root_rank ) then
+       print *, 'generating initial tetmesh of whole domain ...'
+       call tetmesh(tetgen_cmd, npts, x, nquad, ntri, icontag, nhole, xh &
+            , xf, tetcon, neigh, nbntri, bntri)
+       print *, 'initial tetmesh is done!'
+    end if
+
+    ! Broadcast the generated grid info
+
+if ( 1 .eq. 0 ) then
 
     ! ! find the boundary tri connectivity map
     ! ! useful for speedup the code when deciding on
@@ -471,9 +477,6 @@ contains
     allocate(node2bntri(size(xf, 2)))
     call find_node2bntri_map(nbntri = nbntri, bntri = bntri, node2bntri = node2bntri)
 
-
-    ! init MPI (if wanted)
-    call tmpi%init()
 
     ! ! export linear tetmesh
     ! allocate(uu(1, size(xf,2)))
@@ -681,6 +684,7 @@ contains
     if ( allocated(yy) ) deallocate(yy)
     if ( allocated(zz) ) deallocate(zz)
 
+end if ! 1==0
     ! done here
   end subroutine curved_tetgen_geom
 
@@ -1439,6 +1443,9 @@ program tester
   integer :: nhole
   real*8, allocatable :: xh(:)
   type(mpi_comm_t) :: tmpi
+
+  ! init MPI
+  call tmpi%init()
 
   !
   ! call tester1()

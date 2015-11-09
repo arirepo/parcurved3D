@@ -11,7 +11,8 @@
 # CXX should be set to the name of your favorite C++ compiler.
 # ===========================================================
 
-CXX = g++
+# CXX = g++
+CXX = mpic++
 #CXX = icpc
 #CXX = CC
 

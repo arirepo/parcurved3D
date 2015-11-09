@@ -58,7 +58,7 @@ contains
     implicit none
     class(mpi_comm_t), intent(inout) :: this
 
-    call MPI_Barrier ( comm = this%comm_w, ierror = this%mpi_error)
+    call MPI_Barrier (this%comm_w, this%mpi_error)
 
     call this%error_check('barrier')
 
@@ -73,15 +73,15 @@ contains
     if ( .not. this%mpi_comm_initialized ) then
 
        ! init MPI env
-       call MPI_Init( ierror = this%mpi_error)
+       call MPI_Init( this%mpi_error)
        call this%error_check('mpi_init')
 
        ! get my rank
-       call MPI_Comm_rank(comm = this%comm_w, rank = this%rank, ierror = this%mpi_error)
+       call MPI_Comm_rank(this%comm_w, this%rank, this%mpi_error)
        call this%error_check('comm_rank')
 
        ! get number of processes
-       call MPI_Comm_size(comm = this%comm_w, size = this%np, ierror = this%mpi_error)
+       call MPI_Comm_size(this%comm_w, this%np, this%mpi_error)
        call this%error_check('comm_size')
 
        ! set the flag
@@ -102,7 +102,7 @@ contains
     class(mpi_comm_t), intent(inout) :: this
 
     !
-    call MPI_Finalize( ierror = this%mpi_error)
+    call MPI_Finalize( this%mpi_error)
 
 
     ! done here
@@ -115,8 +115,8 @@ contains
     real*8, dimension(:), intent(in) :: buff
     integer, intent(in) :: idest, itag
 
-    call MPI_Send(buf = buff, count = size(buff), datatype = MPI_DOUBLE &
-         , dest = idest, tag = itag, comm = this%comm_w, ierror = this%mpi_error)
+    call MPI_Send(buff, size(buff), MPI_DOUBLE &
+         , idest, itag, this%comm_w, this%mpi_error)
 
     call this%error_check('send_double')
 
@@ -130,9 +130,9 @@ contains
     real*8, dimension(:), intent(out) :: buff
     integer, intent(in) :: isource, itag
 
-    call MPI_recv(buf = buff, count = size(buff), datatype = MPI_DOUBLE &
-         , source = isource, tag = itag, comm = this%comm_w &
-         , status = this%mpi_stat, ierror = this%mpi_error)
+    call MPI_recv(buff, size(buff), MPI_DOUBLE &
+         , isource, itag, this%comm_w &
+         , this%mpi_stat, this%mpi_error)
 
     call this%error_check('recv_double')
 
