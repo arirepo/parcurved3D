@@ -3,6 +3,7 @@ module curved_tet
   use tet_props
   use lag_basis
   use op_cascade
+  use mpi_comm_mod
   implicit none
 
   private
@@ -207,7 +208,7 @@ contains
     nhole = 0
     allocate(xh(nhole))
     ! 
-    call tetmesh('nn', npts, xx, nquad, ntri, icontag, nhole, xh &
+    call tetmesh('nnQ', npts, xx, nquad, ntri, icontag, nhole, xh &
          , xf, tetcon, neigh, nbntri, bntri, 0)
 
     ! filter
@@ -223,7 +224,17 @@ contains
     ! write to tecplot
     print *, 'writing to Tecplot ...'
     allocate(uu(1, npts))
-    uu = 1.0d0
+    !
+    !
+    ! add your desired expression here ...
+    if ( all ( x > 0.0d0 ) ) then
+       uu = 1.0d0
+    else
+       uu = 0.0d0
+    end if
+    !
+    !
+    !
 
     call write_u_tecplot_tet(meshnum=meshnum, outfile=fname &
          , x = xf, icon = tetcon, u = uu &
@@ -381,12 +392,13 @@ contains
   end subroutine tester1
 
   ! 
-  subroutine curved_tetgen_geom(tetgen_cmd, facet_file, cad_file, nhole, xh, tol)
+  subroutine curved_tetgen_geom(tetgen_cmd, facet_file, cad_file, nhole, xh, tol, tmpi)
     implicit none
     character(len = *), intent(in) :: tetgen_cmd, facet_file, cad_file
     integer, intent(in) :: nhole
     real*8, dimension(:), intent(in) :: xh
     real*8, intent(in) :: tol
+    type(mpi_comm_t) :: tmpi
 
     ! local vars
     integer :: ii, jj
@@ -426,6 +438,10 @@ contains
     ! visualization data struct
     real*8 :: xtet(3, 4), lens(6)
     real*8 :: ref_length
+    character(len = 128) :: outname
+
+    ! MPI data struct
+
 
     ! read the facet file
     print *, 'starting curved tetrahedral mesh generator'
@@ -456,45 +472,24 @@ contains
     call find_node2bntri_map(nbntri = nbntri, bntri = bntri, node2bntri = node2bntri)
 
 
-    ! export linear tetmesh
-    allocate(uu(1, size(xf,2)))
-    uu = 1.0d0
-    call write_u_tecplot_tet(meshnum=1, outfile='linear_tets.tec', x = xf &
-         , icon = tetcon, u = uu, appendit = .false.)
-    if ( allocated(uu) ) deallocate(uu)
+    ! init MPI (if wanted)
+    call tmpi%init()
 
-    call find_tet_adj_csr_zero_based(neigh = neigh, xadj = xadj, adj = adj)
+    ! ! export linear tetmesh
+    ! allocate(uu(1, size(xf,2)))
+    ! uu = 1.0d0
+    ! call write_u_tecplot_tet(meshnum=1, outfile='linear_tets.tec', x = xf &
+    !      , icon = tetcon, u = uu, appendit = .false.)
+    ! if ( allocated(uu) ) deallocate(uu)
 
-    nparts = 10
-    allocate(vwgt(size(neigh, 1)), part(size(neigh, 1)))
-    vwgt = 1
-    call call_metis_graph_parti(xadj = xadj, adjncy = adj, vwgt = vwgt &
-         , nparts = nparts, part = part)
-
-    ! write to tecplot
-    allocate(vis_mask(size(neigh, 1)))
-    allocate(uu(1, size(xf,2)))
-    do ii = 1, nparts
-
-       uu = dble(ii)
-       vis_mask = (part .eq. (ii-1))
-
-       if ( ii .eq. 1) then
-          call write_u_tecplot_tet(meshnum=ii, outfile='partitioned.tec', x = xf &
-               , icon = tetcon, u = uu, appendit = .false., is_active = vis_mask)
-       else
-          call write_u_tecplot_tet(meshnum=ii, outfile='partitioned.tec', x = xf &
-               , icon = tetcon, u = uu, appendit = .true., is_active = vis_mask)
-       end if
-
-    end do
-    if ( allocated(uu) ) deallocate(uu)
-    if ( allocated(vis_mask) ) deallocate(vis_mask)
 
     ! find the CAD face of boundary triangles
     call find_bn_tris_CAD_face(cad_file = cad_file, nbntri = nbntri &
          , bntri = bntri, xf = xf, cent_cad_found = cent_cad_found &
          , uvc = uvc, tol = tol)
+
+    ! prepare the output file name
+    write (outname, "(A7,I0.3,A4)") "grdPART", tmpi%rank, ".tec"
 
     ! shift tetcon for each tet such that the first three nodes
     ! are matching the boundary triangle face. This is required
@@ -502,9 +497,45 @@ contains
     !
     allocate( tet_shifted(size(tetcon, 1), size(tetcon, 2)) )
     allocate( tet2bn_tri(size(tetcon, 1)), tet_type(size(tetcon, 1)) )
+
     call shift_tetcon(nbntri = nbntri, bntri = bntri &
          , tetcon = tetcon, tetcon2 = tet_shifted, tet2bn_tri = tet2bn_tri &
          , tet_type = tet_type, cent_cad_found = cent_cad_found)
+
+    ! setup vars for domain decomposition using METIS
+    nparts = tmpi%np
+    allocate(vwgt(size(neigh, 1)), part(size(neigh, 1)))
+    vwgt = 1
+    do jj = 1, size(vwgt)
+       if (tet_type(jj) .ne. 0) then
+          vwgt(jj) = 1
+       end if
+    end do
+
+    call find_tet_adj_csr_zero_based(neigh = neigh, xadj = xadj, adj = adj)
+    call call_metis_graph_parti(xadj = xadj, adjncy = adj, vwgt = vwgt &
+         , nparts = nparts, part = part)
+
+    ! ! write to tecplot
+    ! allocate(vis_mask(size(neigh, 1)))
+    ! allocate(uu(1, size(xf,2)))
+    ! do ii = 1, nparts
+
+    !    uu = dble(ii)
+    !    vis_mask = (part .eq. (ii-1))
+
+    !    if ( ii .eq. 1) then
+    !       call write_u_tecplot_tet(meshnum=ii, outfile='partitioned.tec', x = xf &
+    !            , icon = tetcon, u = uu, appendit = .false., is_active = vis_mask)
+    !    else
+    !       call write_u_tecplot_tet(meshnum=ii, outfile='partitioned.tec', x = xf &
+    !            , icon = tetcon, u = uu, appendit = .true., is_active = vis_mask)
+    !    end if
+
+    ! end do
+    ! if ( allocated(uu) ) deallocate(uu)
+    ! if ( allocated(vis_mask) ) deallocate(vis_mask)
+
 
     ! generate the lagrangian tet. interpolation points
     dd = 6
@@ -512,8 +543,14 @@ contains
     call coord_tet(dd, rr, ss, tt)
     allocate(xx(size(rr)), yy(size(rr)), zz(size(rr))) 
 
-    ! map one face curved tets
+
+    ! map tets
     main_loop:    do ii = 1, size(tetcon, 1)
+
+       ! skip if not in right CPU
+       if ( tmpi%np > 1 ) then
+          if ( tmpi%rank .ne. part(ii) ) cycle ! not in this CPU
+       end if
 
 
        ! pick the appex of the tet required for some mappings
@@ -598,21 +635,20 @@ contains
 
        if ( indx .eq. 1) then
           call export_tet_face_curve(x = xx, y=yy, z=zz, mina = 0.0d0 &
-               , maxa = 160.0d0, fname = 'curved.tec' &
+               , maxa = 160.0d0, fname = trim(outname) &
                , meshnum = indx, append_it = .false., ref_length = ref_length)  
        else
           call export_tet_face_curve(x = xx, y=yy, z=zz, mina = 0.0d0 &
-               , maxa = 160.0d0, fname = 'curved.tec' &
+               , maxa = 160.0d0, fname = trim(outname) &
                , meshnum = indx, append_it = .true., ref_length = ref_length) 
        end if
 
        indx = indx + 1
 
-       print *, 'indx = ', indx
+       ! echo the status
+       print *, 'indx = ', indx, 'on CPU = ', tmpi%rank
 
     end do main_loop
-
-
 
     ! clean ups
     if ( allocated(x) ) deallocate(x)
@@ -889,6 +925,9 @@ contains
        end do
 
     end do
+
+    ! cleanups
+    if ( allocated(tets) ) deallocate(tets)
 
     ! done here
   end subroutine shift_tetcon
@@ -1393,22 +1432,24 @@ end module curved_tet
 
 program tester
   use curved_tet
+  use mpi_comm_mod
   implicit none
 
   ! local vars
   integer :: nhole
   real*8, allocatable :: xh(:)
+  type(mpi_comm_t) :: tmpi
 
   !
   ! call tester1()
 
-  nhole = 1
-  allocate(xh(3))
-  xh = (/ 0.5714d0, 0.4333d0, 0.1180d0 /)
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = (/ 0.5714d0, 0.4333d0, 0.1180d0 /)
 
-  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-       , facet_file = 'missile_spect3.facet' &
-       , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0)
+  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+  !      , facet_file = 'missile_spect3.facet' &
+  !      , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
   ! nhole = 1
   ! allocate(xh(3))
@@ -1426,13 +1467,15 @@ program tester
   !      , facet_file = 'pin.facet' &
   !      , cad_file = 'pin.iges', nhole = nhole, xh = xh, tol = .03d0)
 
-  ! nhole = 1
-  ! allocate(xh(3))
-  ! xh = 0.0d0
+  nhole = 1
+  allocate(xh(3))
+  xh = 0.0d0
 
-  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-  !      , facet_file = 'sphere.facet' &
-  !      , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0)
+  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+       , facet_file = 'sphere.facet' &
+       , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
+
+  call tmpi%finish()
 
   ! done here
 end program tester
