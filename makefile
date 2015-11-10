@@ -14,28 +14,38 @@
 	$(CPPC) $(CPPC_CFLAGS) -I$(INCS) -I$(INCS2) $^ -o $@  
 
 # COMPILER_PATH = /opt/gcc/bin/
-# COMPILER_PATH = 
-COMPILER_PATH = /home/aghasemi/Desktop/openmpi-1.10.0/install_dir/bin/
+COMPILER_PATH = 
+# COMPILER_PATH = /home/aghasemi/Desktop/openmpi-1.10.0/install_dir/bin/
 # F90 = $(COMPILER_PATH)gfortran
-F90 = $(COMPILER_PATH)mpifort
+# F90 = $(COMPILER_PATH)mpifort
+F90 = $(COMPILER_PATH)mpif90
 # F90 = $(COMPILER_PATH)ifort
 #F90_CFLAGS = -c -O3
 F90_CFLAGS = -c -Wall
 # CPPC = $(COMPILER_PATH)g++
-CPPC = $(COMPILER_PATH)mpicxx
+# CPPC = $(COMPILER_PATH)mpicxx
+CPPC = $(COMPILER_PATH)mpic++
 # CPPC = $(COMPILER_PATH)icpc
 CPPC_CFLAGS = -c -DTETLIBRARY
 LIBS =  ./tetgen/
 INCS =  $(LIBS)
 FCLFLAGS = 
-LFLAGS = $(LIBS2)lib* -ltet  -lstdc++ $(OMP_FLAG) -lmetis
+# LFLAGS = $(LIBS2)lib* -ltet  -lstdc++ $(OMP_FLAG) -lmetis
+LFLAGS = -locasdirty -ltet  -lstdc++ $(OMP_FLAG) -lmetis
 # LFLAGS = -ltet
 TETGEN_LIB = $(LIBS)libtet.a
 
-LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/lin64/gcc/lib/
-INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/inc/
+# LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/lin64/gcc/lib/
+#LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/tmp_o_same_gcc/
+LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/tmp_o_rivermont/
 
-LIBS3 =  /home/aghasemi/metis-5.1.0/install_SUSE_13.1_64/lib/
+# INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/inc/
+INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/install_rivermont/inc/
+
+# LIBS3 =  /home/aghasemi/metis-5.1.0/install_SUSE_13.1_64/lib/
+# LIBS3 =  /home/aghasemi/metis-5.1.0/install_cerberus/lib/
+# LIBS3 =  /home/aghasemi/metis-5.1.0/install_ibm_blue/lib/
+LIBS3 =  /home/aghasemi/metis-5.1.0/install_intel_cerberus/lib/
 
 # OMP_FLAG = -fopenmp
 OMP_FLAG =

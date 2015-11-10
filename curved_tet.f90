@@ -1522,13 +1522,13 @@ program tester
   !      , facet_file = 'missile_spect3.facet' &
   !      , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
-  ! nhole = 1
-  ! allocate(xh(3))
-  ! xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+  nhole = 1
+  allocate(xh(3))
+  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
 
-  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
-  !      , facet_file = 'civil3.facet' &
-  !      , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0)
+  call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
+       , facet_file = 'civil3.facet' &
+       , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0, tmpi = tmpi)
 
   ! nhole = 1
   ! allocate(xh(3))
@@ -1538,15 +1538,17 @@ program tester
   !      , facet_file = 'pin.facet' &
   !      , cad_file = 'pin.iges', nhole = nhole, xh = xh, tol = .03d0)
 
-  nhole = 1
-  allocate(xh(3))
-  xh = 0.0d0
+!   nhole = 1
+!   allocate(xh(3))
+!   xh = 0.0d0
 
-  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-       , facet_file = 'sphere.facet' &
-       , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
+!   call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+!        , facet_file = 'sphere.facet' &
+!        , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
   call tmpi%finish()
+
+  print *, 'Done! The End!'
 
   ! done here
 end program tester
