@@ -4,6 +4,7 @@ module curved_tet
   use lag_basis
   use op_cascade
   use mpi_comm_mod
+  use timing
   implicit none
 
   private
@@ -442,6 +443,7 @@ contains
 
     ! MPI data struct
     integer :: size_arr_on_root(2), len_bntri(1)
+    real*8 :: tmp_time
 
     ! read the facet file
     print *, 'starting curved tetrahedral mesh generator'
@@ -607,6 +609,9 @@ contains
     allocate(xx(size(rr)), yy(size(rr)), zz(size(rr))) 
 
 
+    ! timing
+    tmp_time = wtime()
+
     ! map tets
     main_loop:    do ii = 1, size(tetcon, 1)
 
@@ -712,6 +717,17 @@ contains
        print *, 'indx = ', indx, 'on CPU = ', tmpi%rank
 
     end do main_loop
+
+    ! timing
+    tmp_time = wtime() - tmp_time
+    ! write the parallel time to
+    ! the output file on the root 
+    ! process 
+    if ( tmpi%rank .eq. tmpi%root_rank ) then
+       open (unit=30, file='root_wtime.txt', status='unknown', action='write')
+       write(30, *) tmp_time
+       close(30) 
+    end if
 
     ! clean ups
     if ( allocated(x) ) deallocate(x)
@@ -1522,13 +1538,13 @@ program tester
   !      , facet_file = 'missile_spect3.facet' &
   !      , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
-  nhole = 1
-  allocate(xh(3))
-  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
 
-  call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
-       , facet_file = 'civil3.facet' &
-       , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0, tmpi = tmpi)
+  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
+  !      , facet_file = 'civil3.facet' &
+  !      , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0, tmpi = tmpi)
 
   ! nhole = 1
   ! allocate(xh(3))
@@ -1538,13 +1554,13 @@ program tester
   !      , facet_file = 'pin.facet' &
   !      , cad_file = 'pin.iges', nhole = nhole, xh = xh, tol = .03d0)
 
-!   nhole = 1
-!   allocate(xh(3))
-!   xh = 0.0d0
+  nhole = 1
+  allocate(xh(3))
+  xh = 0.0d0
 
-!   call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-!        , facet_file = 'sphere.facet' &
-!        , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
+  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+       , facet_file = 'sphere.facet' &
+       , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
   call tmpi%finish()
 

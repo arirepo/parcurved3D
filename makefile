@@ -42,19 +42,19 @@ LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/tm
 # INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/inc/
 INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/install_rivermont/inc/
 
-# LIBS3 =  /home/aghasemi/metis-5.1.0/install_SUSE_13.1_64/lib/
+LIBS3 =  /home/aghasemi/metis-5.1.0/install_SUSE_13.1_64/lib/
 # LIBS3 =  /home/aghasemi/metis-5.1.0/install_cerberus/lib/
 # LIBS3 =  /home/aghasemi/metis-5.1.0/install_ibm_blue/lib/
-LIBS3 =  /home/aghasemi/metis-5.1.0/install_intel_cerberus/lib/
+# LIBS3 =  /home/aghasemi/metis-5.1.0/install_intel_cerberus/lib/
 
 # OMP_FLAG = -fopenmp
 OMP_FLAG =
 
-curved.run: $(TETGEN_LIB) ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.o
-	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.f90 $(LFLAGS)
+curved.run: $(TETGEN_LIB) timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.o
+	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.f90 $(LFLAGS)
 
 clean:
-	rm -f *.o *.mod *.smod *.out *~ dumped* *.tec $(LIBS)libtet.a 
+	rm -f *.o *.mod *.smod *.out *~ dumped* *.tec $(LIBS)libtet.a *.txt tmp.m opencascade_faces.m
 
 $(TETGEN_LIB):
 	(cd ./tetgen/; $(MAKE) tetlib )
