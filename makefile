@@ -42,10 +42,10 @@ LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/tm
 # INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/inc/
 INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/install_rivermont/inc/
 
-LIBS3 =  /home/aghasemi/metis-5.1.0/install_SUSE_13.1_64/lib/
+# LIBS3 =  /home/aghasemi/metis-5.1.0/install_SUSE_13.1_64/lib/
 # LIBS3 =  /home/aghasemi/metis-5.1.0/install_cerberus/lib/
 # LIBS3 =  /home/aghasemi/metis-5.1.0/install_ibm_blue/lib/
-# LIBS3 =  /home/aghasemi/metis-5.1.0/install_intel_cerberus/lib/
+LIBS3 =  /home/aghasemi/metis-5.1.0/install_intel_cerberus/lib/
 
 # OMP_FLAG = -fopenmp
 OMP_FLAG =

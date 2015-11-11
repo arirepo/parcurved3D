@@ -32,6 +32,7 @@ module mpi_comm_mod
      procedure :: recv_double => mpi_comm_recv_double
      procedure :: bcast_int => mpi_comm_bcast_integer
      procedure :: bcast_double => mpi_comm_bcast_double
+     procedure :: reduce_max_double => mpi_comm_reduce_max_double
 
   end type mpi_comm_t
 
@@ -169,6 +170,21 @@ contains
 
     ! done here
   end subroutine mpi_comm_bcast_double
+
+  !
+  subroutine mpi_comm_reduce_max_double(this, buff_send, buff_recv)
+    implicit none
+    class(mpi_comm_t), intent(inout) :: this
+    real*8, dimension(:), intent(in) :: buff_send
+    real*8, dimension(:), intent(out) :: buff_recv
+
+    call MPI_REDUCE(buff_send, buff_recv, size(buff_send), MPI_DOUBLE, MPI_MAX &
+         , this%root_rank, this%comm_w, this%mpi_error)
+
+    call this%error_check('reduce_max_double')
+
+    ! done here
+  end subroutine mpi_comm_reduce_max_double
 
 end module mpi_comm_mod
 

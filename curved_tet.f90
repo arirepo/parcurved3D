@@ -443,7 +443,7 @@ contains
 
     ! MPI data struct
     integer :: size_arr_on_root(2), len_bntri(1)
-    real*8 :: tmp_time
+    real*8 :: tmp_time, root_max_timing(1)
 
     ! read the facet file
     print *, 'starting curved tetrahedral mesh generator'
@@ -603,7 +603,7 @@ contains
 
 
     ! generate the lagrangian tet. interpolation points
-    dd = 6
+    dd = 12
     indx = 1
     call coord_tet(dd, rr, ss, tt)
     allocate(xx(size(rr)), yy(size(rr)), zz(size(rr))) 
@@ -720,12 +720,15 @@ contains
 
     ! timing
     tmp_time = wtime() - tmp_time
+    ! reduce all timings on root
+    call tmpi%reduce_max_double((/ tmp_time /), root_max_timing )
+
     ! write the parallel time to
     ! the output file on the root 
     ! process 
     if ( tmpi%rank .eq. tmpi%root_rank ) then
        open (unit=30, file='root_wtime.txt', status='unknown', action='write')
-       write(30, *) tmp_time
+       write(30, *) root_max_timing(1)
        close(30) 
     end if
 
