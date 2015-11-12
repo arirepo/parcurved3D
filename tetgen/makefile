@@ -11,8 +11,8 @@
 # CXX should be set to the name of your favorite C++ compiler.
 # ===========================================================
 
-# CXX = g++
-CXX = mpic++
+CXX = g++
+#CXX = mpic++
 #CXX = icpc
 #CXX = CC
 
@@ -20,7 +20,7 @@ CXX = mpic++
 # -O2, -O3 ... to find the best optimization level.
 # ===================================================================
 
-CXXFLAGS = -O3
+CXXFLAGS = -O
 
 # PREDCXXFLAGS is for compiling J. Shewchuk's predicates. 
 
@@ -37,7 +37,7 @@ PREDCXXFLAGS = -O0
 #   down the speed of TetGen.  They can be skipped by define the -DNDEBUG
 #   switch.
 
-SWITCHES = 
+SWITCHES = -DNDEBUG
 
 # RM should be set to the name of your favorite rm (file deletion program).
 

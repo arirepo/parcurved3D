@@ -209,8 +209,21 @@ contains
     nhole = 0
     allocate(xh(nhole))
     ! 
-    call tetmesh('nnQ', npts, xx, nquad, ntri, icontag, nhole, xh &
+    call tetmesh('nQ', npts, xx, nquad, ntri, icontag, nhole, xh &
          , xf, tetcon, neigh, nbntri, bntri, 0)
+
+    ! bullet proof 
+    if ( npts .ne. size(xf,2) ) then
+       print *, 'Warning : npts .ne. size(xf,2) in export_tet_face_curve(...)!'
+       ! print *, 'x = ', x
+       ! print *, 'y = ', y
+       ! print *, 'z = ', z
+
+       ! print *, 'xf(1, :) = ', xf(1, :)
+       ! print *, 'xf(2, :) = ', xf(2, :)
+       ! print *, 'xf(3, :) = ', xf(3, :)
+       !stop
+    end if
 
     ! filter
     allocate(is_active(size(tetcon, 1)))
@@ -224,11 +237,11 @@ contains
 
     ! write to tecplot
     print *, 'writing to Tecplot ...'
-    allocate(uu(1, npts))
+    allocate(uu(1, size(xf,2)))
     !
     !
     ! add your desired expression here ...
-    if ( all ( x > 0.0d0 ) ) then
+    if ( all ( y > 0.0d0 ) ) then
        uu = 1.0d0
     else
        uu = 0.0d0
@@ -603,7 +616,7 @@ contains
 
 
     ! generate the lagrangian tet. interpolation points
-    dd = 12
+    dd = 5
     indx = 1
     call coord_tet(dd, rr, ss, tt)
     allocate(xx(size(rr)), yy(size(rr)), zz(size(rr))) 
@@ -1541,13 +1554,13 @@ program tester
   !      , facet_file = 'missile_spect3.facet' &
   !      , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
-  ! nhole = 1
-  ! allocate(xh(3))
-  ! xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+  nhole = 1
+  allocate(xh(3))
+  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
 
-  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
-  !      , facet_file = 'civil3.facet' &
-  !      , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0, tmpi = tmpi)
+  call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
+       , facet_file = 'civil3.facet' &
+       , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0, tmpi = tmpi)
 
   ! nhole = 1
   ! allocate(xh(3))
@@ -1557,13 +1570,13 @@ program tester
   !      , facet_file = 'pin.facet' &
   !      , cad_file = 'pin.iges', nhole = nhole, xh = xh, tol = .03d0)
 
-  nhole = 1
-  allocate(xh(3))
-  xh = 0.0d0
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = 0.0d0
 
-  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-       , facet_file = 'sphere.facet' &
-       , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
+  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+  !      , facet_file = 'sphere.facet' &
+  !      , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
   call tmpi%finish()
 
