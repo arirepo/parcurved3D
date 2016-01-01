@@ -10,6 +10,7 @@ module curved_tet
   private
 
   real*8, parameter :: Radius = 2.0d0
+  logical :: LOAD_BALANCE_BASED_ON_BOUNDARY = .true.
 
   type int_array
      integer, dimension(:), allocatable :: val
@@ -412,7 +413,7 @@ contains
     integer, intent(in) :: nhole
     real*8, dimension(:), intent(in) :: xh
     real*8, intent(in) :: tol
-    type(mpi_comm_t) :: tmpi
+    class(mpi_comm_t) :: tmpi
 
     ! local vars
     integer :: ii, jj
@@ -434,6 +435,10 @@ contains
     integer, dimension(:), allocatable :: xadj, adj, vwgt, part
     integer :: nparts
     logical, dimension(:), allocatable :: vis_mask
+    ! vars for boundary-based decomp
+    integer, dimension(:), allocatable :: inter_elems, near_bn_elems
+    integer, allocatable :: arrl(:), arrg(:)
+    integer :: itet
 
     ! CAD corresponding data struct
     integer, allocatable :: cent_cad_found(:) !nbntri
@@ -579,6 +584,200 @@ contains
          , tetcon = tetcon, tetcon2 = tet_shifted, tet2bn_tri = tet2bn_tri &
          , tet_type = tet_type, cent_cad_found = cent_cad_found)
 
+    ! generate the lagrangian tet. interpolation points
+    dd = 12
+    call coord_tet(dd, rr, ss, tt)
+    allocate(xx(size(rr)), yy(size(rr)), zz(size(rr))) 
+
+! determine the type of load-balance
+if ( LOAD_BALANCE_BASED_ON_BOUNDARY ) then
+
+   ! determine interior and boundary elems
+   call decomp_based_on_bn(tet_type = tet_type, inter_elems = inter_elems &
+        , near_bn_elems = near_bn_elems)
+
+   ! init
+   indx = 1
+   ! timing
+   tmp_time = wtime()
+
+   ! decomp near boundary elems
+   call equal_decomp_nelem_by_np(nelem = size(near_bn_elems) &
+        , np = tmpi%np, arr = arrl)
+   call loc2glob_indx(arrl = arrl, arrg = arrg)
+
+   ! only do its portion of this process rank
+   do itet = arrg(tmpi%rank+1), (arrg(tmpi%rank+2)-1) 
+      ii = near_bn_elems(itet) ! get tet number
+
+      ! pick the appex of the tet required for some mappings
+      xA = xf(:, tet_shifted(ii, 4))
+
+      ! compute xbot
+      do jj = 1, 3
+         xbot(:, jj) = xf(:, tet_shifted(ii, jj))
+      end do
+
+      ! fill this tet coords
+      do jj = 1, 4
+         xtet(:, jj) = xf(:, tet_shifted(ii,jj))
+      end do
+
+      select case ( tet_type(ii) )
+
+      case ( 0 ) ! interior, use linear (straight map)
+         ! do nothing at this point
+
+      case ( 1 ) ! one face (tri) of the tet on CAD boundary
+
+         ! bullet proofing ...
+         if ( tet2bn_tri(ii) .eq. -1 ) then
+            print *, 'This tet is supposed to be one-face-bn' &
+                 , ' tet but is NOT! stop'
+            stop
+         end if
+
+         ! 
+         CAD_face = cent_cad_found(tet2bn_tri(ii))
+         ! bullet proofing ...
+         if ( CAD_face .eq. -1 ) then !bn tet not on CAD database 
+            print *, 'this boundary-face tet has a CAD face' &
+                 , ' tag equal to -1! stop'
+            stop
+         end if
+
+
+         is_CAD_bn_tri = is_tri_near_CAD_boundary(node2bntri = node2bntri &
+              , CAD_face = cent_cad_found, nodes = tet_shifted(ii, 1:3))
+
+         do jj = 1, size(rr)
+
+            if ( .not.  is_CAD_bn_tri) then
+               call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
+                    , xbot = xbot, xA = xA, tol = tol, x = xx(jj), y = yy(jj) &
+                    , z = zz(jj) &
+                    , CAD_face_input = CAD_face)
+
+            else
+
+               call master2curved_tet_ocas_close(r = rr(jj),s = ss(jj),t = tt(jj) &
+                    , xbot = xbot, xA = xA, tol = tol, x = xx(jj) &
+                    , y = yy(jj), z = zz(jj))
+
+            end if
+
+         end do
+
+
+      case (2) ! one-edge-curved-on-CAD tet
+
+
+         do jj = 1, size(rr)
+            call master2curved_edg_tet_ocas_close(r= rr(jj),s= ss(jj),t= tt(jj) &
+                 , xyz = xtet, x = xx(jj), y = yy(jj), z = zz(jj), tol = tol)
+         end do
+
+      case default
+
+         print *, 'unknown tet_type happened! stop'
+         stop
+
+      end select
+
+!       ! export the generated curved element
+!       call tetrahedron_edge_length ( tetra = xtet, edge_length = lens)
+!       ref_length = 1.5d0 * maxval(lens) / dble(dd)
+
+!       if ( indx .eq. 1) then
+!          call export_tet_face_curve(x = xx, y=yy, z=zz, mina = 0.0d0 &
+!               , maxa = 160.0d0, fname = trim(outname) &
+!               , meshnum = indx, append_it = .false., ref_length = ref_length)  
+!       else
+!          call export_tet_face_curve(x = xx, y=yy, z=zz, mina = 0.0d0 &
+!               , maxa = 160.0d0, fname = trim(outname) &
+!               , meshnum = indx, append_it = .true., ref_length = ref_length) 
+!       end if
+
+      indx = indx + 1
+
+      ! echo the status
+      print *, 'still boundary elems, indx = ', indx, 'on CPU = ', tmpi%rank
+
+   end do
+
+! call tmpi%barrier()
+
+   ! finally, decomp interior elems
+   call equal_decomp_nelem_by_np(nelem = size(inter_elems) &
+        , np = tmpi%np, arr = arrl)
+   call loc2glob_indx(arrl = arrl, arrg = arrg)
+
+   ! only do its portion of this process rank
+   do itet = arrg(tmpi%rank+1), (arrg(tmpi%rank+2)-1) 
+      ii = inter_elems(itet) ! get tet number
+
+      ! pick the appex of the tet required for some mappings
+      xA = xf(:, tet_shifted(ii, 4))
+
+      ! compute xbot
+      do jj = 1, 3
+         xbot(:, jj) = xf(:, tet_shifted(ii, jj))
+      end do
+
+      ! fill this tet coords
+      do jj = 1, 4
+         xtet(:, jj) = xf(:, tet_shifted(ii,jj))
+      end do
+
+      select case ( tet_type(ii) )
+
+      case ( 0 ) ! interior, use linear (straight map)
+
+         do jj = 1, size(rr)
+            call master2curved_tet_straight(r= rr(jj),s = ss(jj),t= tt(jj) &
+                 , xbot = xbot, xA = xA, x = xx(jj), y = yy(jj), z = zz(jj))
+         end do
+
+
+      case ( 1 ) ! one face (tri) of the tet on CAD boundary
+
+         ! do nothing at this point
+
+
+      case (2) ! one-edge-curved-on-CAD tet
+
+         ! do nothing at this point
+
+      case default
+
+         print *, 'unknown tet_type happened! stop'
+         stop
+
+      end select
+
+!       ! export the generated curved element
+!       call tetrahedron_edge_length ( tetra = xtet, edge_length = lens)
+!       ref_length = 1.5d0 * maxval(lens) / dble(dd)
+
+!       if ( indx .eq. 1) then
+!          call export_tet_face_curve(x = xx, y=yy, z=zz, mina = 0.0d0 &
+!               , maxa = 160.0d0, fname = trim(outname) &
+!               , meshnum = indx, append_it = .false., ref_length = ref_length)  
+!       else
+!          call export_tet_face_curve(x = xx, y=yy, z=zz, mina = 0.0d0 &
+!               , maxa = 160.0d0, fname = trim(outname) &
+!               , meshnum = indx, append_it = .true., ref_length = ref_length) 
+!       end if
+
+      indx = indx + 1
+
+      ! echo the status
+      print *, 'interior elems, indx = ', indx, 'on CPU = ', tmpi%rank
+
+   end do
+
+
+else !LOAD-BALANCE
 
     ! setup vars for domain decomposition using METIS
     nparts = tmpi%np
@@ -615,12 +814,8 @@ contains
     ! if ( allocated(vis_mask) ) deallocate(vis_mask)
 
 
-    ! generate the lagrangian tet. interpolation points
-    dd = 5
+    ! init
     indx = 1
-    call coord_tet(dd, rr, ss, tt)
-    allocate(xx(size(rr)), yy(size(rr)), zz(size(rr))) 
-
 
     ! timing
     tmp_time = wtime()
@@ -731,6 +926,9 @@ contains
 
     end do main_loop
 
+end if ! LOAD-BALANCE
+
+! call tmpi%barrier()
     ! timing
     tmp_time = wtime() - tmp_time
     ! reduce all timings on root
@@ -753,10 +951,10 @@ contains
     if ( allocated(neigh) ) deallocate(neigh)
     if ( allocated(bntri) ) deallocate(bntri)
 
-    do jj = 1, size(node2bntri)
-       if ( allocated(node2bntri(jj)%val) ) deallocate(node2bntri(jj)%val)
-    end do
-    if ( allocated(node2bntri) ) deallocate(node2bntri)
+!     do jj = 1, size(node2bntri)
+!        if ( allocated(node2bntri(jj)%val) ) deallocate(node2bntri(jj)%val)
+!     end do
+!     if ( allocated(node2bntri) ) deallocate(node2bntri)
 
     if ( allocated(uu) ) deallocate(uu)
     if ( allocated(xadj) ) deallocate(xadj)
@@ -764,6 +962,10 @@ contains
     if ( allocated(vwgt) ) deallocate(vwgt)
     if ( allocated(part) ) deallocate(part)
     if ( allocated(vis_mask) ) deallocate(vis_mask)
+    if ( allocated(inter_elems) ) deallocate(inter_elems)
+    if ( allocated(near_bn_elems) ) deallocate(near_bn_elems)
+    if ( allocated(arrl) ) deallocate(arrl)
+    if ( allocated(arrg) ) deallocate(arrg)
     if ( allocated(cent_cad_found) ) deallocate(cent_cad_found)
     if ( allocated(uvc) ) deallocate(uvc)
     if ( allocated(tet_shifted) ) deallocate(tet_shifted)
@@ -828,38 +1030,38 @@ contains
          , found = cent_cad_found, uv = uvc, tol = tol)
 
     ! compute physical center of bn tris and export to MATLAB ...
-    open (unit=10, file='tmp.m', status='unknown', action='write')
-    write(10, *) 'x = ['
+!     open (unit=10, file='tmp.m', status='unknown', action='write')
+!     write(10, *) 'x = ['
     do ii = 1, nbntri
        tuv(1) = uvc(2*(ii-1) + 1)
        tuv(2) = uvc(2*(ii-1) + 2)
        if (cent_cad_found(ii) .eq. -1) cycle
        call uv2xyz_f90(CAD_face = cent_cad_found(ii), uv = tuv, xyz = txyz)
        print *, 'writing the center of bntri #', ii
-       write(10, *) txyz, ';'
+!        write(10, *) txyz, ';'
     end do
-    write(10, *) '];'
+!     write(10, *) '];'
 
     ! print mapped bn triangles
-    write(10, *) 'tris = ['
+!     write(10, *) 'tris = ['
     do ii = 1, nbntri
        if (cent_cad_found(ii) .eq. -1) cycle
        do jj = 1, 3
           tpt = bntri(6*(ii-1) + jj)
           xbn(:, jj) = xf(:, tpt)
        end do
-       write(10, *) xbn(:, 1), ';'
-       write(10, *) xbn(:, 2), ';'
-       write(10, *) xbn(:, 3), ';'
-       write(10, *) xbn(:, 1), ';' 
+!        write(10, *) xbn(:, 1), ';'
+!        write(10, *) xbn(:, 2), ';'
+!        write(10, *) xbn(:, 3), ';'
+!        write(10, *) xbn(:, 1), ';' 
        ! print*, ' '
     end do
-    write(10, *) '];'
-    close(10)
+!     write(10, *) '];'
+!     close(10)
 
 
     ! close CAD objects
-    call clean_statics_f90()
+    !call clean_statics_f90()
 
     ! cleanups
     if ( allocated(xc) ) deallocate(xc)
@@ -1528,6 +1730,93 @@ contains
     ! done here
   end subroutine master2curved_tet_straight
 
+  !
+  subroutine decomp_based_on_bn(tet_type, inter_elems, near_bn_elems)
+    implicit none
+    integer, dimension(:), intent(in) :: tet_type
+    integer, dimension(:), allocatable :: inter_elems, near_bn_elems
+
+    !local vars
+    integer :: ii, nint, nbn
+
+    ! count interior and near boundary elems
+    nint = 0
+    nbn = 0
+    do ii = 1, size(tet_type)
+       if ( tet_type(ii) .eq. 0 ) then
+          nint = nint + 1
+       else
+          nbn = nbn + 1
+       end if
+    end do
+
+    ! size them
+    if ( allocated(inter_elems) ) deallocate(inter_elems)
+    allocate( inter_elems(nint) )
+    if ( allocated(near_bn_elems) ) deallocate(near_bn_elems)
+    allocate( near_bn_elems(nbn) )
+
+    ! fill the decomposition
+    nint = 1
+    nbn = 1
+    do ii = 1, size(tet_type)
+       if ( tet_type(ii) .eq. 0 ) then
+          inter_elems(nint) = ii 
+          nint = nint + 1
+       else
+          near_bn_elems(nbn) = ii
+          nbn = nbn + 1
+       end if
+    end do
+
+    ! done here
+  end subroutine decomp_based_on_bn
+
+  !
+  subroutine equal_decomp_nelem_by_np(nelem, np, arr)
+    implicit none
+    integer, intent(in) :: nelem, np
+    integer, dimension(:), allocatable :: arr
+
+    ! local vars
+    integer :: i, Di
+
+    Di = floor(dble(nelem) / dble(np))
+    if ( allocated(arr) ) deallocate(arr)
+    allocate(arr(np))
+
+    arr = Di
+
+    !almost equally add (distribute) the remainder
+    do i = 1, mod(nelem, np)
+       arr(i) = arr(i) + 1
+    end do
+
+    ! done here
+  end subroutine equal_decomp_nelem_by_np
+
+  ! 
+  subroutine loc2glob_indx(arrl, arrg)
+    implicit none
+    integer, dimension(:), intent(in) :: arrl
+    integer, dimension(:), allocatable :: arrg
+
+    ! local vars
+    integer :: i, tot_sum
+
+    if ( allocated(arrg) ) deallocate(arrg)
+    allocate(arrg(size(arrl) + 1))
+
+    tot_sum = 1
+    do i = 1, size(arrl)
+       arrg(i) = tot_sum
+       arrg(i+1) = tot_sum + arrl(i)  
+       tot_sum  = tot_sum + arrl(i)
+    end do
+
+    ! done here
+  end subroutine loc2glob_indx
+
 end module curved_tet
 
 program tester
@@ -1578,9 +1867,11 @@ program tester
   !      , facet_file = 'sphere.facet' &
   !      , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
-  call tmpi%finish()
+
 
   print *, 'Done! The End!'
+
+  call tmpi%finish()
 
   ! done here
 end program tester

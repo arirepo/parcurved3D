@@ -55,6 +55,7 @@ int pt_in_box(int ii, const gp_Pnt& tpt);
 #define MY_MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 #define TRI_QUERY_FAST
 #define USE_SURF_ANALY
+//#define ECHO_SURF_TRIANG_TO_FILE
 
 //
 // Statically accessible vars and storage
@@ -429,12 +430,14 @@ int find_cad_faces_bounding_boxes(void)
   gp_Pnt vert[3];
   Standard_Integer pts[3];
 
+#ifdef ECHO_SURF_TRIANG_TO_FILE
   // this file output is only for debug
   // and/or visualization
   ofstream myFile;
   printf(" writing openCASCADE incremental face mesh to opencascade_faces.m \n"); 
   myFile.open ("opencascade_faces.m");
   myFile << "tris = [" << endl;
+#endif
 
   // HARD Reset!
   anExp_static.ReInit();
@@ -486,6 +489,7 @@ int find_cad_faces_bounding_boxes(void)
 		bn_boxs[ii].zmax = MY_MAX(bn_boxs[ii].zmax, vert[jj].Z());
 	      }
 
+#ifdef ECHO_SURF_TRIANG_TO_FILE
 	    // write face triangulation to file
 	    // three vertices
 	    for (jj = 0; jj < 3; jj++)
@@ -495,6 +499,7 @@ int find_cad_faces_bounding_boxes(void)
 	    jj = 0;
 	    myFile << vert[jj].X() << " " << vert[jj].Y() 
 		   << " " << vert[jj].Z() << ";" << endl;
+#endif
 
 	  }
       }
@@ -502,11 +507,12 @@ int find_cad_faces_bounding_boxes(void)
 
   }
 
+#ifdef ECHO_SURF_TRIANG_TO_FILE
   // finalize the debug file
   myFile << "];" << endl;
   myFile.close();
-
   printf(" done writing opencascade_faces.m! \n"); 
+#endif
 
   // done here!
   return 0;
