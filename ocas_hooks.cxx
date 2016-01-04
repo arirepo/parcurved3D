@@ -452,9 +452,12 @@ int find_cad_faces_bounding_boxes(void)
   // triangulation <NOT VERY ACCURATE>
   BRepMesh_IncrementalMesh(sh_static,100.0);
 
+  ii = 0; //found this!!!
+
   // loop over faces
   for(;(anExp_static.More() && (1));anExp_static.Next()){
     ii = ii + 1;
+
     const TopoDS_Face& anFace = TopoDS::Face(anExp_static.Current());
 
     // Get triangulation
