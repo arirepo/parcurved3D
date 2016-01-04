@@ -55,7 +55,7 @@ int pt_in_box(int ii, const gp_Pnt& tpt);
 #define MY_MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 #define TRI_QUERY_FAST
 #define USE_SURF_ANALY
-// #define ECHO_SURF_TRIANG_TO_FILE
+#define ECHO_SURF_TRIANG_TO_FILE //also includes bn_boxes
 
 //
 // Statically accessible vars and storage
@@ -64,6 +64,7 @@ TopoDS_Shape sh_static;
 TopExp_Explorer anExp_static;
 int CURRENT_CAD_FACE_TAG = -1;
 gp_Pnt2d UVprev_stored;
+int CURRENT_TOPODS_FACES = -1;
 
 // The following is used to store bounding
 // box for each TopoDS face of CAD model.
@@ -419,6 +420,61 @@ extern "C" int uv2xyz(int CAD_face, double *uv, double *xyz)
 
 }
 
+int export_bn_boxes_tecplot(const char *fname)
+{
+
+  int i, j;
+  ofstream myFile;
+
+  printf(" writing bounding boxes to %s ...\n", fname); 
+  myFile.open (fname);
+
+  //bullet proofing
+  if (CURRENT_TOPODS_FACES == -1)
+    {
+      printf("\n\n\n bounding boxes first need to be computed! stop \n\n\n");
+      exit(0);
+    }
+
+  //write the header
+  myFile << "title = \"bounding boxes here\" " << endl;
+  myFile << "variables = \"x\", \"y\", \"z\" " << endl;
+  //continue writing header of tecplot file ...
+  myFile << "zone n = " << (8*CURRENT_TOPODS_FACES) << " , e = " 
+	 << CURRENT_TOPODS_FACES << " , f = fepoint, et = brick " << endl;
+
+  // first write the coords
+  for( i = 1; i <= CURRENT_TOPODS_FACES; i++)
+    {
+      myFile << bn_boxs[i].xmin << " " << bn_boxs[i].ymin << " " << bn_boxs[i].zmin << endl;
+      myFile << bn_boxs[i].xmax << " " << bn_boxs[i].ymin << " " << bn_boxs[i].zmin << endl;
+      myFile << bn_boxs[i].xmax << " " << bn_boxs[i].ymax << " " << bn_boxs[i].zmin << endl;
+      myFile << bn_boxs[i].xmin << " " << bn_boxs[i].ymax << " " << bn_boxs[i].zmin << endl;
+
+      myFile << bn_boxs[i].xmin << " " << bn_boxs[i].ymin << " " << bn_boxs[i].zmax << endl;
+      myFile << bn_boxs[i].xmax << " " << bn_boxs[i].ymin << " " << bn_boxs[i].zmax << endl;
+      myFile << bn_boxs[i].xmax << " " << bn_boxs[i].ymax << " " << bn_boxs[i].zmax << endl;
+      myFile << bn_boxs[i].xmin << " " << bn_boxs[i].ymax << " " << bn_boxs[i].zmax << endl;
+
+    }
+
+  // then, write the connectivity
+  for( i = 1; i <= CURRENT_TOPODS_FACES; i++)
+    {
+      for ( j = 1; j <= 8; j++)
+	myFile << (8*(i-1) + j) << " "; 
+
+      myFile << endl;
+    }
+
+  //close the outputfile
+  myFile.close();
+  printf(" done writing to %s! \n", fname); 
+
+  // done here!
+  return 0;
+}
+
 // finds the bounding box of each TopoDS_Face
 // and stores it in static array bn_boxs[]
 //  
@@ -545,8 +601,10 @@ int find_cad_faces_bounding_boxes(void)
 	  }
       }
 
-
   }
+
+  // save the number of CAD faces
+  CURRENT_TOPODS_FACES = ii;
 
 #ifdef ECHO_SURF_TRIANG_TO_FILE
   // finalize the debug file
@@ -554,6 +612,10 @@ int find_cad_faces_bounding_boxes(void)
   myFile.close();
   // printf(" done writing opencascade_faces.m! \n"); 
   printf(" done writing opencascade_faces.tec! \n"); 
+
+  //export bounding boxes
+  export_bn_boxes_tecplot("bn_boxes_tec");
+
 #endif
 
   // done here!
