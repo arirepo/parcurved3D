@@ -55,7 +55,7 @@ int pt_in_box(int ii, const gp_Pnt& tpt);
 #define MY_MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 #define TRI_QUERY_FAST
 #define USE_SURF_ANALY
-//#define ECHO_SURF_TRIANG_TO_FILE
+// #define ECHO_SURF_TRIANG_TO_FILE
 
 //
 // Statically accessible vars and storage
@@ -427,6 +427,7 @@ int find_cad_faces_bounding_boxes(void)
 
   // local vars
   int ii, jj;
+  int nCellFace, nNodeFace;
   gp_Pnt vert[3];
   Standard_Integer pts[3];
 
@@ -434,9 +435,11 @@ int find_cad_faces_bounding_boxes(void)
   // this file output is only for debug
   // and/or visualization
   ofstream myFile;
-  printf(" writing openCASCADE incremental face mesh to opencascade_faces.m \n"); 
-  myFile.open ("opencascade_faces.m");
-  myFile << "tris = [" << endl;
+  // printf(" writing openCASCADE incremental face mesh to opencascade_faces.m \n"); 
+  // myFile.open ("opencascade_faces.m");
+  // myFile << "tris = [" << endl;
+  printf(" writing openCASCADE incremental face mesh to opencascade_faces.tec \n"); 
+  myFile.open ("opencascade_faces.tec");
 #endif
 
   // HARD Reset!
@@ -459,6 +462,41 @@ int find_cad_faces_bounding_boxes(void)
     Handle (Poly_Triangulation) facing = BRep_Tool::Triangulation(anFace,L);
     const Poly_Array1OfTriangle & triangles = facing->Triangles();
     const TColgp_Array1OfPnt & nodes = facing->Nodes();
+
+#ifdef ECHO_SURF_TRIANG_TO_FILE
+    nCellFace = triangles.Upper() - triangles.Lower() + 1;
+    nNodeFace = nodes.Upper() - nodes.Lower() + 1;
+
+    myFile << "title = \"tris\" " << endl;
+    myFile << "variables = \"x\", \"y\", \"z\" " << endl;
+    //continue writing header of tecplot file ...
+    myFile << "zone n = " << nNodeFace << " , e = " 
+           << nCellFace << " , f = fepoint, et = triangle " << endl;
+
+    if (!facing.IsNull()) //if that face is triangulated
+      {
+	// write face triangulation nodes to file
+	for ( int i=1; i <= nNodeFace; i++ )
+	  {
+	      myFile << nodes(i).X() << " " << nodes(i).Y() 
+		     << " " << nodes(i).Z() << endl;
+          }
+
+	for ( int i=facing->NbTriangles(); i >= 1; --i )
+	  {
+	    //get one of the triangles on that face
+	    Poly_Triangle triangle = triangles(i);
+	    // get the node number of that triangle
+	    triangle.Get(pts[0], pts[1], pts[2]);
+	    myFile << pts[0] << " " << pts[1] << " " << pts[2] << endl;
+          }
+       }
+    else
+       {
+         myFile << " No triangulation for this CAD face! " << endl;
+       }
+#endif
+
     if (!facing.IsNull()) //if that face is triangulated
       {
 	for ( int i=facing->NbTriangles(); i >= 1; --i )
@@ -489,17 +527,17 @@ int find_cad_faces_bounding_boxes(void)
 		bn_boxs[ii].zmax = MY_MAX(bn_boxs[ii].zmax, vert[jj].Z());
 	      }
 
-#ifdef ECHO_SURF_TRIANG_TO_FILE
-	    // write face triangulation to file
-	    // three vertices
-	    for (jj = 0; jj < 3; jj++)
-	      myFile << vert[jj].X() << " " << vert[jj].Y() 
-		     << " " << vert[jj].Z() << ";" << endl;
-	    // and the last one repeated
-	    jj = 0;
-	    myFile << vert[jj].X() << " " << vert[jj].Y() 
-		   << " " << vert[jj].Z() << ";" << endl;
-#endif
+// #ifdef ECHO_SURF_TRIANG_TO_FILE
+// 	    // write face triangulation to file
+// 	    // three vertices
+// 	    for (jj = 0; jj < 3; jj++)
+// 	      myFile << vert[jj].X() << " " << vert[jj].Y() 
+// 		     << " " << vert[jj].Z() << ";" << endl;
+// 	    // and the last one repeated
+// 	    jj = 0;
+// 	    myFile << vert[jj].X() << " " << vert[jj].Y() 
+// 		   << " " << vert[jj].Z() << ";" << endl;
+// #endif
 
 	  }
       }
@@ -509,9 +547,10 @@ int find_cad_faces_bounding_boxes(void)
 
 #ifdef ECHO_SURF_TRIANG_TO_FILE
   // finalize the debug file
-  myFile << "];" << endl;
+  // myFile << "];" << endl;
   myFile.close();
-  printf(" done writing opencascade_faces.m! \n"); 
+  // printf(" done writing opencascade_faces.m! \n"); 
+  printf(" done writing opencascade_faces.tec! \n"); 
 #endif
 
   // done here!
