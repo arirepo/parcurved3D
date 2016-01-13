@@ -457,7 +457,7 @@ contains
     ! visualization data struct
     real*8 :: xtet(3, 4), lens(6)
     real*8 :: ref_length
-    character(len = 128) :: outname
+    character(len = 128) :: outname, this_cpu_wtime
 
     ! MPI data struct
     integer :: size_arr_on_root(2), len_bntri(1)
@@ -931,6 +931,13 @@ end if ! LOAD-BALANCE
 ! call tmpi%barrier()
     ! timing
     tmp_time = wtime() - tmp_time
+
+    ! write the time of this process 
+    write (this_cpu_wtime, "(A9,I0.3,A5)") "cpu_wtime", tmpi%rank, ".time"
+    open (unit=22, file=this_cpu_wtime, status='unknown', action='write')
+    write(22, *) tmp_time
+    close(22)
+
     ! reduce all timings on root
     call tmpi%reduce_max_double((/ tmp_time /), root_max_timing )
 

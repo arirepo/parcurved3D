@@ -55,7 +55,7 @@ int pt_in_box(int ii, const gp_Pnt& tpt);
 #define MY_MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 #define TRI_QUERY_FAST
 #define USE_SURF_ANALY
-#define ECHO_SURF_TRIANG_TO_FILE //also includes bn_boxes
+// #define ECHO_SURF_TRIANG_TO_FILE //also includes bn_boxes
 
 //
 // Statically accessible vars and storage
