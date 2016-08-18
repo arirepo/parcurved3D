@@ -22,7 +22,7 @@ F90 = $(COMPILER_PATH)mpif90
 # F90 = $(COMPILER_PATH)ifort
 #F90_CFLAGS = -c -O3
 # F90_CFLAGS = -c -check all -g -CB
-F90_CFLAGS = -c 
+F90_CFLAGS = -c -W1 
 # CPPC = $(COMPILER_PATH)g++
 # CPPC = $(COMPILER_PATH)mpicxx
 CPPC = $(COMPILER_PATH)mpic++
@@ -51,8 +51,11 @@ LIBS3 =  /home/aghasemi/metis-5.1.0/install_intel_cerberus/lib/
 # OMP_FLAG = -fopenmp
 OMP_FLAG =
 
-curved.run: $(TETGEN_LIB) timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.o
-	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.f90 $(LFLAGS)
+curved.run: $(TETGEN_LIB) var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.o
+	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.f90 $(LFLAGS)
+
+vl.run: $(TETGEN_LIB) var_array.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o
+	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) var_array.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_prism.f90 $(LFLAGS)
 
 clean:
 	rm -f *.o *.mod *.smod *.out *~ dumped* *.tec $(LIBS)libtet.a *.txt tmp.m opencascade_faces.m

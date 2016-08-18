@@ -1,4 +1,5 @@
 module curved_tet
+  use var_array
   use tetmesher
   use tet_props
   use lag_basis
@@ -12,9 +13,6 @@ module curved_tet
   real*8, parameter :: Radius = 2.0d0
   logical :: LOAD_BALANCE_BASED_ON_BOUNDARY = .true.
 
-  type int_array
-     integer, dimension(:), allocatable :: val
-  end type int_array
 
   public :: coord_tet, master2curved_tet
   public :: export_tet_face_curve, master2curved_edg_tet
@@ -1581,32 +1579,6 @@ end if ! LOAD-BALANCE
     ! done here
   end subroutine find_node2bntri_map
 
-  subroutine push_int_2_array(a, i)
-    implicit none
-    integer, dimension(:), allocatable :: a
-    integer, intent(in) :: i
-
-    ! local vars
-    integer :: n
-    integer, dimension(:), allocatable :: itmp
-
-    if ( .not. allocated(a) ) then
-       n = 1
-    else
-       n = size(a) + 1
-    end if
-
-    allocate(itmp(n))
-    if ( n > 1 ) itmp(1:(n-1)) = a(1:(n-1))
-    itmp(n) = i
-    call move_alloc(itmp, a)
-
-    ! clean
-    if ( allocated(itmp) ) deallocate(itmp)
-
-    ! done here
-  end subroutine push_int_2_array
-
   function is_tri_near_CAD_boundary(node2bntri, CAD_face, nodes)
     implicit none
     type(int_array), dimension(:), intent(in), target :: node2bntri
@@ -1850,13 +1822,13 @@ program tester
   !      , facet_file = 'missile_spect3.facet' &
   !      , cad_file = 'store.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
-  nhole = 1
-  allocate(xh(3))
-  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
 
-  call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
-       , facet_file = 'civil3.facet' &
-       , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0, tmpi = tmpi)
+  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.214nnY' &
+  !      , facet_file = 'civil3.facet' &
+  !      , cad_file = 'civil3.iges', nhole = nhole, xh = xh, tol = 20.0d0, tmpi = tmpi)
 
   ! nhole = 1
   ! allocate(xh(3))
@@ -1866,13 +1838,13 @@ program tester
   !      , facet_file = 'pin.facet' &
   !      , cad_file = 'pin.iges', nhole = nhole, xh = xh, tol = .03d0)
 
-  ! nhole = 1
-  ! allocate(xh(3))
-  ! xh = 0.0d0
+  nhole = 1
+  allocate(xh(3))
+  xh = 0.0d0
 
-  ! call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
-  !      , facet_file = 'sphere.facet' &
-  !      , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
+  call curved_tetgen_geom(tetgen_cmd = 'pq1.414nnY' &
+       , facet_file = 'sphere.facet' &
+       , cad_file = 'sphere2.iges', nhole = nhole, xh = xh, tol = .03d0, tmpi = tmpi)
 
 
 
