@@ -4,9 +4,19 @@ module prism_mesher
 
   private
 
+  ! information type for viscous layer insertion
+  type vl_info
+     ! the tags of the boundary facets that need to insert VL
+     ! others : will be skipped
+     integer, dimension(:), allocatable :: tags
 
+     ! the fraction (min edge length in neighborhood) 
+     ! in which boundary facet will be extruded
+     real*8 :: nu
+  end type vl_info
 
   public :: comp_bn_tri_normal, find_node2icontag, extrude_bn_tris
+  public :: vl_info
 
 contains
 
@@ -156,24 +166,26 @@ contains
   !
   ! NOTE : icontag remains the same and only <x> changes!!!
   ! 
-  subroutine extrude_bn_tris(npts, x, bn_tri_normal, node2icontag,nu,min_edg_len, x2)
+  subroutine extrude_bn_tris(npts, x, bn_tri_normal, icontag, node2icontag &
+       ,min_edg_len, tvl_info, x2)
     implicit none
     integer, intent(in) :: npts
     real*8, dimension(:), intent(in) :: x
     real*8, dimension(:,:), intent(in) :: bn_tri_normal
+    integer, dimension(:), intent(in) :: icontag
     type(int_array), dimension(:), intent(in) :: node2icontag
-    real*8, intent(in) :: nu
     real*8, dimension(:), intent(in) :: min_edg_len
+    type(vl_info), intent(in) :: tvl_info
     real*8, dimension(:), allocatable :: x2
 
     ! local vars
-    integer :: i, i1, i2, j, tneigh
+    integer :: i, i1, i2, j, tneigh, tneigh_is_vl, ttag
     real*8 :: a_ave(3), neigh_min, x0(3)
 
     ! initialize ...
     if ( allocated(x2) ) deallocate(x2)
     allocate(x2(size(x)))
-    x2 = 0.0d0
+    x2 = x
 
     ! loop over nodes ...
     do i = 1, npts
@@ -185,10 +197,19 @@ contains
 
        ! loop over neighboring triangles ...
        a_ave = 0.0d0
+       tneigh_is_vl = 0
        do j = 1, size(node2icontag(i)%val)
 
           ! find the number of the current neighbor triangle
           tneigh = node2icontag(i)%val(j)
+
+          ! find its tag
+          ttag = icontag(4*tneigh)
+
+          if ( any(tvl_info%tags .eq. ttag) ) then
+             tneigh_is_vl = tneigh_is_vl + 1
+          end if
+  
           ! find the average of facet normals in the the neighboring triangles
           a_ave = a_ave + bn_tri_normal(tneigh, :)
 
@@ -198,13 +219,29 @@ contains
           else
              neigh_min = min( neigh_min, min_edg_len(tneigh))
           end if
+
        end do ! next neighbor
 
        ! normalize the outward vector 
        a_ave = a_ave / sqrt(sum(a_ave*a_ave))
 
-       ! compute the extrusion
-       x2(i1:i2) = x0 + nu * neigh_min * a_ave
+       ! finally perform the extrusion if is consistent ...
+       !
+       if ( tneigh_is_vl .eq. 0 ) then 
+          ! do nothing; because this point is on a boundary
+          ! that does not have viscous layer
+       elseif ( tneigh_is_vl .eq. size(node2icontag(i)%val) ) then
+          ! all the neighbor facest are on VL region; so
+          ! perform extrusion
+
+          ! compute the extrusion
+          x2(i1:i2) = x0 + tvl_info%nu * neigh_min * a_ave
+       else
+          print *, 'The point #', i , ' of given facets is' &
+               , ' on the intersection of viscous and inviscid layers! ' &
+               , ' These two regions must NOT have an intersection! stop'
+          stop
+       end if
 
     end do
 

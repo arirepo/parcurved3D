@@ -12,13 +12,15 @@ module curved_prism
 contains
 
   ! 
-  subroutine curved_prism_geom(tetgen_cmd, facet_file, cad_file, nhole, xh, tol, tmpi)
+  subroutine curved_prism_geom(tetgen_cmd, facet_file, cad_file &
+       , nhole, xh, tol, tmpi, tvl_info)
     implicit none
     character(len = *), intent(in) :: tetgen_cmd, facet_file, cad_file
     integer, intent(in) :: nhole
     real*8, dimension(:), intent(in) :: xh
     real*8, intent(in) :: tol
     class(mpi_comm_t) :: tmpi
+    type(vl_info), intent(in) :: tvl_info
 
     ! local vars
     !
@@ -59,7 +61,8 @@ contains
     print *, 'done with map!'
 
     print *, 'insert prism layer ...'
-    call extrude_bn_tris(npts, x, bn_tri_normal, node2icontag,nu,min_edg_len, x2)
+    call extrude_bn_tris(npts, x, bn_tri_normal, icontag, node2icontag &
+         ,min_edg_len, tvl_info, x2)
 
     ! !
     ! ! generic tetmesher subroutine
@@ -69,12 +72,12 @@ contains
          , xf, tetcon, neigh, nbntri, bntri)
     print *, 'initial tetmesh is done!'
 
-    ! ! export linear tetmesh
-    ! allocate(uu(1, size(xf,2)))
-    ! uu = 1.0d0
-    ! call write_u_tecplot_tet(meshnum=1, outfile='linear_tets.tec', x = xf &
-    !      , icon = tetcon, u = uu, appendit = .false.)
-    ! if ( allocated(uu) ) deallocate(uu)
+    ! export linear tetmesh
+    allocate(uu(1, size(xf,2)))
+    uu = 1.0d0
+    call write_u_tecplot_tet(meshnum=1, outfile='linear_tets.tec', x = xf &
+         , icon = tetcon, u = uu, appendit = .false.)
+    if ( allocated(uu) ) deallocate(uu)
 
     end if
 
@@ -85,27 +88,47 @@ contains
 end module curved_prism
 
 program tester
+  use prism_mesher
   use curved_prism
   use mpi_comm_mod
   implicit none
 
   ! local vars
+  integer :: ii
   integer :: nhole
   real*8, allocatable :: xh(:)
   type(mpi_comm_t) :: tmpi
+  type(vl_info) :: tvl_info
 
   ! init MPI
   call tmpi%init()
 
 
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = 0.0d0
+  ! allocate(tvl_info%tags(4))
+  ! tvl_info%tags = (/ 1,2,3,4/)
+
+  ! tvl_info%nu = 0.3d0
+
+  ! call curved_prism_geom(tetgen_cmd = 'pq1.414nnY' &
+  !      , facet_file = 'sphere_orient.facet' &
+  !      , cad_file = 'sphere2.iges', nhole = nhole &
+  !      , xh = xh, tol = .03d0, tmpi = tmpi, tvl_info = tvl_info)
+
   nhole = 1
   allocate(xh(3))
-  xh = 0.0d0
+  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+  allocate(tvl_info%tags(40))
+  tvl_info%tags = (/ (ii, ii = 1, 40) /)
 
-  call curved_prism_geom(tetgen_cmd = 'pq1.414nnY' &
-       , facet_file = 'sphere_orient.facet' &
-       , cad_file = 'sphere2.iges', nhole = nhole &
-       , xh = xh, tol = .03d0, tmpi = tmpi)
+  tvl_info%nu = 0.3d0
+
+  call curved_prism_geom(tetgen_cmd = 'pq1.214nnY' &
+       , facet_file = 'civil3_orient.facet' &
+       , cad_file = 'civil3.iges', nhole = nhole &
+       , xh = xh, tol = 20.0d0, tmpi = tmpi, tvl_info = tvl_info)
 
 
 
