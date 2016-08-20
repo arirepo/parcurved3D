@@ -32,7 +32,7 @@ LIBS =  ./tetgen/
 INCS =  $(LIBS)
 FCLFLAGS = 
 # LFLAGS = $(LIBS2)lib* -ltet  -lstdc++ $(OMP_FLAG) -lmetis
-LFLAGS = -locasdirty -ltet  -lstdc++ $(OMP_FLAG) -lmetis
+LFLAGS = -locasdirty -ltet  -lstdc++ $(OMP_FLAG) -lmetis -lblas -llapack
 # LFLAGS = -ltet
 TETGEN_LIB = $(LIBS)libtet.a
 
@@ -54,8 +54,8 @@ OMP_FLAG =
 curved.run: $(TETGEN_LIB) var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.o
 	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.f90 $(LFLAGS)
 
-vl.run: $(TETGEN_LIB) var_array.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o
-	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) var_array.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_prism.f90 $(LFLAGS)
+vl.run: $(TETGEN_LIB) gen_basis.o var_array.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o
+	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) gen_basis.o var_array.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_prism.f90 $(LFLAGS)
 
 clean:
 	rm -f *.o *.mod *.smod *.out *~ dumped* *.tec $(LIBS)libtet.a *.txt tmp.m opencascade_faces.m

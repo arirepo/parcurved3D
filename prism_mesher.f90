@@ -1,5 +1,7 @@
 module prism_mesher
   use var_array
+  use lag_basis
+  use op_cascade
   implicit none
 
   private
@@ -16,7 +18,8 @@ module prism_mesher
   end type vl_info
 
   public :: comp_bn_tri_normal, find_node2icontag, extrude_bn_tris
-  public :: vl_info
+  public :: vl_info, coord_tri, map_master_tri_to_phys
+  public :: detect_prism_tris
 
 contains
 
@@ -247,5 +250,122 @@ contains
 
     ! done here
   end subroutine extrude_bn_tris
+
+  ! generates master elements coords of 
+  ! interpolation points (r,s) and
+  ! stores them in (x,y) 
+  subroutine coord_tri(d, x, y)
+    implicit none
+    integer, intent(in) :: d
+    real*8, dimension(:), allocatable :: x, y
+
+    ! local vars
+    integer :: npe, i, j, jj
+    real*8 :: dx, dy, xloc, yloc
+
+    npe = (d+1) * (d+2) / 2
+    dx = 1.0d0 / dble(d)
+    dy = 1.0d0 / dble(d)
+    allocate(x(npe), y(npe))
+    x = 0.0d0; y = 0.0d0
+
+    jj = 1
+    xloc = 1.0d0 
+    do i = 0, d
+       yloc = 0.0d0
+       do j = 0, i
+          x(jj) = xloc
+          y(jj) = yloc
+          yloc = yloc + dy 
+          jj = jj + 1
+       end do
+       xloc = xloc - dx
+    end do
+
+    ! done here
+  end subroutine coord_tri
+
+  ! maps the master-elem point-distibution of a triangle
+  ! given by (r,s) (for an arbitrary order interpolation)
+  ! to the physical space <x> using a P1
+  ! interpolation by utilizing the physical coords of the
+  ! p1 elements stored in <xv>
+  !
+  ! INPUTS :
+  ! xv(xyz, 3)
+  ! (r, s) = interpolation nodes in the master triangle (2D)
+  ! 
+  ! OUTPUTS :
+  ! x(xyz, size(r)) = mapped points in physical space (3D)
+  !
+  subroutine map_master_tri_to_phys(xv, r, s, tol, x)
+    implicit none
+    real*8, dimension(:,:), intent(in) :: xv
+    real*8, dimension(:), intent(in) :: r, s
+    real*8, intent(in) :: tol
+    real*8, dimension(:,:), allocatable :: x
+
+    ! local vars
+    integer :: ii, jj, CAD_face(1)
+    real*8 :: val, der(2), uvout(2)
+
+    if ( allocated(x) ) deallocate(x)
+    allocate(x(3, size(r)))
+    x = 0.0d0
+
+    ! loop over all interpolation points in the master element
+    do ii = 1, size(r)
+
+       do jj = 1, 3
+          ! map (r(ii),s(ii)) to xyz using p1 lagrange basis ... 
+          call psi(etype=1, i=jj, r=r(ii), s=s(ii), val=val, der=der)
+          x(:, ii) = x(:, ii) + val * xv(:, jj)  
+       end do
+
+       ! find uv and corresponding CAD face
+       call find_pts_on_database_f90(npts = 1, pts = x(:, ii) &
+            , found = CAD_face, uv = uvout, tol = tol)
+       if ( CAD_face(1) .eq. -1 ) then
+          print *, 'CAD_face .eq. -1 in map_master_tri_to_phys(...)!' &
+               , '  increase tolerance! stop'
+          stop
+       end if
+
+       ! snap the point to CAD face using the already found CAD face and uv ...
+       call uv2xyz_f90(CAD_face = CAD_face(1), uv = uvout, xyz = x(:, ii))
+
+    end do
+
+    ! done here
+  end subroutine map_master_tri_to_phys
+
+  ! find the tri # number of the boundary facet triangles
+  ! that correspond to a VL tag. These need to be extruded
+  ! These are called <prism_tris>
+  !
+  subroutine detect_prism_tris(ntri, icontag, tags, prism_tris)
+    implicit none
+    integer, intent(in) :: ntri
+    integer, dimension(:), intent(in) :: icontag, tags
+    integer, dimension(:), allocatable :: prism_tris
+
+    ! local vars
+    integer :: i, ttag
+
+    ! loop over all bn facets
+    do i = 1, ntri
+
+       ttag = icontag(4*i)
+
+       ! if this tri is on a VL tag
+       if ( any(tags .eq. ttag) ) then
+          ! then add this tri to the list
+          call push_int_2_array(prism_tris, i)
+       end if
+
+    end do
+
+    ! done here
+  end subroutine detect_prism_tris
 
 end module prism_mesher
