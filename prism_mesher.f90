@@ -15,6 +15,14 @@ module prism_mesher
      ! the fraction (min edge length in neighborhood) 
      ! in which boundary facet will be extruded
      real*8 :: nu
+
+     ! order of boundary representation via polynomials
+     integer :: p_brep = 1
+
+     ! enable/disable visualization of the boundary facet subtriangulation
+     ! very useful for fancy highly curved boundary visualization 
+     logical :: enable_bn_tris_vis = .false.
+
   end type vl_info
 
   public :: comp_bn_tri_normal, find_node2icontag, extrude_bn_tris

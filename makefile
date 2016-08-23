@@ -8,6 +8,9 @@
 # will automatically create it! 
 #
 # 
+%.o: %.f
+	$(F77) -c $^ -o $@
+
 %.o: %.f90
 	$(F90) $(F90_CFLAGS) $^ -o $@
 %.o: %.cxx
@@ -22,7 +25,8 @@ F90 = $(COMPILER_PATH)mpif90
 # F90 = $(COMPILER_PATH)ifort
 #F90_CFLAGS = -c -O3
 # F90_CFLAGS = -c -check all -g -CB
-F90_CFLAGS = -c -W1 
+F90_CFLAGS = -c -W1
+F77 = $(F90) 
 # CPPC = $(COMPILER_PATH)g++
 # CPPC = $(COMPILER_PATH)mpicxx
 CPPC = $(COMPILER_PATH)mpic++
@@ -54,8 +58,8 @@ OMP_FLAG =
 curved.run: $(TETGEN_LIB) var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.o
 	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o tet_props.o mpi_comm_mod.o curved_tet.f90 $(LFLAGS)
 
-vl.run: $(TETGEN_LIB) gen_basis.o var_array.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o
-	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) gen_basis.o var_array.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_prism.f90 $(LFLAGS)
+vl.run: $(TETGEN_LIB) renka_trimesh_lib.o renka_trimesh.o gen_basis.o var_array.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o
+	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) renka_trimesh_lib.o renka_trimesh.o gen_basis.o var_array.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_prism.f90 $(LFLAGS)
 
 clean:
 	rm -f *.o *.mod *.smod *.out *~ dumped* *.tec $(LIBS)libtet.a *.txt tmp.m opencascade_faces.m
