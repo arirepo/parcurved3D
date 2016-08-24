@@ -327,7 +327,7 @@ program tester
   real*8, allocatable :: x_pri(:, :), x_tet(:, :)
 
   ! generate a sample prism
-  p_pri = 1
+  p_pri = 8
   call sample_prism_coords(p = p_pri, shift_x = (/0.0d0, 0.0d0, 0.0d0/) &
        , x = x_pri)
   ! generate a sample tet
@@ -374,6 +374,12 @@ program tester
        , y = thomesh%x_pri(2, :, 1), z = thomesh%x_pri(3, :, 1), mina = 20.0d0 &
        , maxa = 155.0d0, fname = 'homesh.tec', meshnum = 1, append_it = .false.)
 
+  call export_tet_face_curve(x = thomesh%x_tet(1, :, 1) &
+       , y = thomesh%x_tet(2, :, 1), z = thomesh%x_tet(3, :, 1), mina = 20.0d0 &
+       , maxa = 155.0d0, fname = 'homesh.tec', meshnum = 2, append_it = .true.)
+
+  ! finalize
+  call thomesh%clean()
 
 contains
 
