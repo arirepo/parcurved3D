@@ -7,8 +7,13 @@ module var_array
      integer, dimension(:), allocatable :: val
   end type int_array
 
+  type double2_array
+     real*8, dimension(:, :), allocatable :: val
+  end type double2_array
+
 
   public :: int_array, push_int_2_array
+  public :: double2_array
 
 contains
 

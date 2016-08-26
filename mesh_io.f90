@@ -9,40 +9,48 @@ module mesh_io
   ! consisting arbitrary order 
   ! curved prisms and tets 
   type homesh
-
      ! private
-
-     ! number of prisms and number of pts per prism
-     integer :: n_pri, npe_pri
-     ! the global (unique) number of each prism
-     ! n_glob_pri(prism#) = 
-     integer, dimension(:), allocatable :: n_glob_pri
-     ! the physical coordinates of points in each prism
-     ! x_pri (1:3;xyz, 1:npe_pri, 1:n_pri) 
-     real*8, dimension(:, :, :), allocatable :: x_pri
-     ! icon_pri(prism#, 1:5neighs)
-     integer, dimension(:, :) , allocatable :: icon_pri
-     ! neigh_pri(1:n_pri) -> union(node2elem maps(i=1, 6vertices))
-     type(int_array), dimension(:) , allocatable :: neigh_pri
-
-     ! number of tets and number of pts per tet
-     integer :: n_tet, npe_tet
-     ! the global (unique) number of each tet
-     ! n_glob_tet(tetrahedral#) = 
-     integer, dimension(:), allocatable :: n_glob_tet
-     ! the physical coordinates of points in each tet
-     ! x_tet (1:3;xyz, 1:npe_tet, 1:n_tet) 
-     real*8, dimension(:, :, :), allocatable :: x_tet
-     ! icon_tet(tetrahedral#, 1:4neighs)
-     integer, dimension(:, :) , allocatable :: icon_tet
-     ! neigh_tet(1:n_tet) -> union(node2elem maps(i=1, 4vertices))
-     type(int_array), dimension(:) , allocatable :: neigh_tet
-
      ! mpi environment and parallel read/write vars 
      integer :: mpi_rank
      character(len = 800) :: fname
 
+     ! the global (unique) number of each element
+     ! n_glob(elem#) = 
+     integer, dimension(:), allocatable :: n_glob
+     ! the physical coordinates of points in each element
+     ! x (:) -> (1:3;xyz, 1:npe) 
+     type(double2_array), dimension(:), allocatable :: x
+     ! adj(:) -> [adjacent element 1, ..., adjacent element k] 
+     type(int_array), dimension(:) , allocatable :: adj
+     ! near(:) -> union(node2elem maps(i=1, #vertices)) (global elem #)
+     type(int_array), dimension(:) , allocatable :: near
 
+     !                  THE FOLLOWING PART :
+     ! ONLY INITIALIZED WHEN NEEDED (NOT APPLICABLE FOR DG)
+     !
+     ! CONTINUOUS HOMESH FORMAT
+     !
+     ! npts = the number of final unique interpolation nodes 
+     !        (after removing the duplicates nodes in discontinuous grids)
+     ! 
+     integer :: npts_dg, npts
+     real*8 :: tol_dg = 0.0d0
+     ! xyz(3, npts_dg) = the physical coordinates of the nodes 
+     ! NOTE : npts_dg  is the number of nodes in DG grid (including duplicates)
+     !        and we always have: 
+     !                              npts_dg > npts
+     !     
+     real*8, dimension(:, :), allocatable :: xyz
+     ! number of boundary (facet) triangles
+     integer :: n_bntri 
+     ! number of points per boundary triangle 
+     integer :: npp_bntri
+     ! icon(number of elems, MAX of the number of npe)
+     ! bntri_info(1:n_bntri, (npp_bntri+ 3)) = [pt1, pt2, ..., pt_nppbn, tag, 
+     !             connected element number , local el. face in that element]
+     !
+     integer, dimension(:, :), allocatable :: icon, bntri_info
+     
    contains
 
      procedure , public :: init  => init_homesh
@@ -51,6 +59,9 @@ module mesh_io
      procedure , public :: read => read_homesh
      ! procedure , public :: append => append_homesh
      procedure, public :: echo => echo_homesh 
+     procedure, public :: d2c => convert_discont_2_cont
+     procedure, private :: is_pt_in_neigh
+     procedure, private :: loc_pt
 
   end type homesh
 
@@ -61,56 +72,22 @@ contains
 
   ! initializes a high-order mesh object
   !
-  subroutine init_homesh(this, n_pri, npe_pri, n_tet, npe_tet, mpi_rank)
+  subroutine init_homesh(this, mpi_rank, nelem)
     implicit none
     class(homesh), intent(inout) :: this
-    integer, intent(in) :: n_pri, npe_pri, n_tet, npe_tet, mpi_rank
-
-    ! number of prisms and number of pts per prism
-    this%n_pri = n_pri
-    this%npe_pri = npe_pri
-
-    ! the global (unique) number of each prism
-    ! n_glob_pri(prism#) = 
-    allocate(this%n_glob_pri(this%n_pri))
-    this%n_glob_pri = 0
-
-    ! the physical coordinates of points in each prism
-    ! x_pri (1:3;xyz, 1:npe_pri, 1:n_pri) 
-    allocate(this%x_pri(3, this%npe_pri, this%n_pri))
-    this%x_pri = 0.0d0
-
-    ! icon_pri(prism#, 1:5neighs)
-    allocate(this%icon_pri(this%n_pri, 5))
-    this%icon_pri = 0
-
-    ! neigh_pri(1:n_pri) -> union(node2elem maps(i=1, 6vertices))
-    allocate(this%neigh_pri(this%n_pri))
-
-    ! number of tets and number of pts per tet
-    this%n_tet = n_tet 
-    this%npe_tet = npe_tet
-
-    ! the global (unique) number of each tet
-    ! n_glob_tet(tetrahedral#) = 
-    allocate(this%n_glob_tet(this%n_tet))
-    this%n_glob_tet = 0
-
-    ! the physical coordinates of points in each tet
-    ! x_tet (1:3;xyz, 1:npe_tet, 1:n_tet) 
-    allocate(this%x_tet(3, this%npe_tet, this%n_tet))
-    this%x_tet = 0.0d0
-
-    ! icon_tet(tetrahedral#, 1:4neighs)
-    allocate(this%icon_tet(this%n_tet, 4))
-    this%icon_tet = 0
-
-    ! neigh_tet(1:n_tet) -> union(node2elem maps(i=1, 4vertices))
-    allocate(this%neigh_tet(this%n_tet))
+    integer, intent(in) :: mpi_rank, nelem
 
     ! mpi environment and parallel read/write vars 
     this%mpi_rank = mpi_rank
     write (this%fname, "(A6,I0.4)") "homesh", this%mpi_rank
+
+    ! the global (unique) number of each element
+    allocate(this%n_glob(nelem))
+    this%n_glob = 0
+
+    allocate(this%x(nelem))
+    allocate(this%adj(nelem))
+    allocate(this%near(nelem))
 
     ! done here
   end subroutine init_homesh
@@ -121,33 +98,31 @@ contains
     class(homesh), intent(inout) :: this
 
     ! local vars
-    integer :: i
+    integer :: i, nelem
 
-    ! clean prisms ...
-    this%n_pri = 0
-    this%npe_pri = 0
-    if ( allocated(this%n_glob_pri) ) deallocate(this%n_glob_pri)
-    if ( allocated(this%x_pri) ) deallocate(this%x_pri)
-    if ( allocated(this%icon_pri) ) deallocate(this%icon_pri)
-    do i = 1, size(this%neigh_pri)
-       if ( allocated(this%neigh_pri(i)%val) ) deallocate(this%neigh_pri(i)%val)
-    end do
-    if ( allocated(this%neigh_pri) ) deallocate(this%neigh_pri)
+    nelem = size(this%x)
 
-    ! clean tetrahedrons
-    this%n_tet = 0
-    this%npe_tet = 0
-    if ( allocated(this%n_glob_tet) ) deallocate(this%n_glob_tet)
-    if ( allocated(this%x_tet) ) deallocate(this%x_tet)
-    if ( allocated(this%icon_tet) ) deallocate(this%icon_tet)
-    do i = 1, size(this%neigh_tet)
-       if ( allocated(this%neigh_tet(i)%val) ) deallocate(this%neigh_tet(i)%val)
+    this%mpi_rank = 0
+    if ( allocated(this%n_glob) ) deallocate(this%n_glob)
+
+    do i = 1, nelem
+       if ( allocated(this%x(i)%val ) ) deallocate(this%x(i)%val)
+       if ( allocated(this%adj(i)%val ) ) deallocate(this%adj(i)%val)
+       if ( allocated(this%near(i)%val ) ) deallocate(this%near(i)%val)
     end do
-    if ( allocated(this%neigh_tet) ) deallocate(this%neigh_tet)
+    if ( allocated(this%x) ) deallocate( this%x )
+    if ( allocated(this%adj) ) deallocate( this%adj )
+    if ( allocated(this%near) ) deallocate( this%near )
 
     ! 
-    this%mpi_rank = 0
-    ! this%fname = ''
+    this%npts_dg = 0
+    this%npts = 0
+
+    if ( allocated(this%xyz) ) deallocate(this%xyz)
+    this%n_bntri = 0
+    this%npp_bntri = 0
+    if ( allocated(this%icon) ) deallocate(this%icon)
+    if ( allocated(this%bntri_info) ) deallocate(this%bntri_info)
 
     ! done here
   end subroutine clean_homesh
@@ -158,35 +133,33 @@ contains
     class(homesh), intent(in) :: this
 
     ! local vars
-    integer :: i, unit_id, iostat
+    integer :: i, unit_id, iostat, nelem
+
+    nelem = size(this%x)
 
     ! open file ...
     open(newunit=unit_id, file=this%fname, form='unformatted', &
          status='replace', action='write')
 
-    ! write prisms ...
-    write(unit_id, iostat=iostat) this%n_pri, this%npe_pri
-    write(unit_id, iostat=iostat) this%n_glob_pri
-    write(unit_id, iostat=iostat) this%x_pri
-    write(unit_id, iostat=iostat) this%icon_pri
-    do i = 1, this%n_pri
-       write(unit_id, iostat=iostat) size(this%neigh_pri(i)%val)
-       write(unit_id, iostat=iostat) this%neigh_pri(i)%val
-    end do
-
-    ! write tets ...
-    write(unit_id, iostat=iostat) this%n_tet, this%npe_tet
-    write(unit_id, iostat=iostat) this%n_glob_tet
-    write(unit_id, iostat=iostat) this%x_tet
-    write(unit_id, iostat=iostat) this%icon_tet
-    do i = 1, this%n_tet
-       write(unit_id, iostat=iostat) size(this%neigh_tet(i)%val)
-       write(unit_id, iostat=iostat) this%neigh_tet(i)%val
-    end do
-
     ! write session related vars
     write(unit_id, iostat=iostat) this%mpi_rank
     write(unit_id, iostat=iostat) this%fname
+
+    ! 
+    write(unit_id, iostat=iostat) nelem ! number of elements
+    write(unit_id, iostat=iostat) this%n_glob
+    do i = 1, nelem
+       write(unit_id, iostat=iostat) size(this%x(i)%val, 1), size(this%x(i)%val, 2) 
+       write(unit_id, iostat=iostat) this%x(i)%val
+    end do
+    do i = 1, nelem
+       write(unit_id, iostat=iostat) size(this%adj(i)%val)
+       write(unit_id, iostat=iostat) this%adj(i)%val
+    end do
+    do i = 1, nelem
+       write(unit_id, iostat=iostat) size(this%near(i)%val)
+       write(unit_id, iostat=iostat) this%near(i)%val
+    end do
 
     ! close file ...
     close(unit_id)
@@ -201,11 +174,10 @@ contains
 
     ! local vars
     integer :: i, unit_id, iostat
-    integer :: itmp
+    integer :: nelem, dim, npe, itmp
 
     ! bullet proofing
-    if ( allocated(this%x_pri) .or. allocated(this%x_tet) &
-         .or. (this%n_pri .ne. 0) .or. (this%n_tet .ne. 0) ) then
+    if ( allocated(this%x) .or. allocated(this%n_glob) ) then
        call this%clean()
     end if
 
@@ -213,39 +185,36 @@ contains
     open(newunit=unit_id, file=this%fname, form='unformatted', &
          status='old', action='read')
 
-    ! read prisms ...
-    read(unit_id, iostat=iostat) this%n_pri, this%npe_pri
-    allocate( this%n_glob_pri(this%n_pri) )
-    read(unit_id, iostat=iostat) this%n_glob_pri
-    allocate( this%x_pri(3, this%npe_pri, this%n_pri) )
-    read(unit_id, iostat=iostat) this%x_pri
-    allocate( this%icon_pri(this%n_pri, 5) )
-    read(unit_id, iostat=iostat) this%icon_pri
-    allocate( this%neigh_pri(this%n_pri) )
-    do i = 1, this%n_pri
-       read(unit_id, iostat=iostat) itmp
-       allocate(this%neigh_pri(i)%val(itmp) )
-       read(unit_id, iostat=iostat) this%neigh_pri(i)%val
-    end do
-
-    ! read tets ...
-    read(unit_id, iostat=iostat) this%n_tet, this%npe_tet
-    allocate( this%n_glob_tet(this%n_tet) )
-    read(unit_id, iostat=iostat) this%n_glob_tet
-    allocate( this%x_tet(3, this%npe_tet, this%n_tet) )
-    read(unit_id, iostat=iostat) this%x_tet
-    allocate( this%icon_tet(this%n_tet, 4) )
-    read(unit_id, iostat=iostat) this%icon_tet
-    allocate( this%neigh_tet(this%n_tet) )
-    do i = 1, this%n_tet
-       read(unit_id, iostat=iostat) itmp
-       allocate(this%neigh_tet(i)%val(itmp) )
-       read(unit_id, iostat=iostat) this%neigh_tet(i)%val
-    end do
-
     ! read session related vars
     read(unit_id, iostat=iostat) this%mpi_rank
     read(unit_id, iostat=iostat) this%fname
+
+    !
+    read(unit_id, iostat=iostat) nelem
+
+    allocate( this%n_glob(nelem) )
+    read(unit_id, iostat=iostat) this%n_glob
+
+    allocate( this%x(nelem) )
+    do i = 1, nelem
+       read(unit_id, iostat=iostat) dim, npe
+       allocate(this%x(i)%val(dim, npe))
+       read(unit_id, iostat=iostat) this%x(i)%val
+    end do
+
+    allocate( this%adj(nelem) )
+    do i = 1, nelem
+       read(unit_id, iostat=iostat) itmp
+       allocate(this%adj(i)%val(itmp))
+       read(unit_id, iostat=iostat) this%adj(i)%val
+    end do
+
+    allocate( this%near(nelem) )
+    do i = 1, nelem
+       read(unit_id, iostat=iostat) itmp
+       allocate(this%near(i)%val(itmp))
+       read(unit_id, iostat=iostat) this%near(i)%val
+    end do
 
     ! close file ...
     close(unit_id)
@@ -260,47 +229,7 @@ contains
     class(homesh), intent(in) :: this
 
     ! local vars
-    integer :: i, j
-
-    ! print prism(s)
-    print *, 'n_pri   = ', this%n_pri
-    print *, 'npe_pri = ', this%npe_pri
-    do i = 1, this%n_pri
-       print *, 'n_glob_pri(', i, ') = ', this%n_glob_pri(i)
-    end do
-    do i = 1, this%n_pri
-       print *, 'In prism # ', i, ' we have:'
-       do j = 1, size(this%x_pri, 2)
-          print *, 'Point ', j, ' = (', this%x_pri(1, j, i) &
-               , this%x_pri(2, j, i), this%x_pri(3, j, i) , ')'
-       end do
-    end do
-    do i = 1, this%n_pri
-       print *, 'icon_pri(i, :) = ', this%icon_pri(i, :)
-    end do
-    do i = 1, this%n_pri
-       print *, 'this%neigh_pri(i)%val = ', this%neigh_pri(i)%val 
-    end do
-
-    ! print tet(s)
-    print *, 'n_tet   = ', this%n_tet
-    print *, 'npe_tet = ', this%npe_tet
-    do i = 1, this%n_tet
-       print *, 'n_glob_tet(', i, ') = ', this%n_glob_tet(i)
-    end do
-    do i = 1, this%n_tet
-       print *, 'In tetrahedron # ', i, ' we have:'
-       do j = 1, size(this%x_tet, 2)
-          print *, 'Point ', j, ' = (', this%x_tet(1, j, i) &
-               , this%x_tet(2, j, i), this%x_tet(3, j, i) , ')'
-       end do
-    end do
-    do i = 1, this%n_tet
-       print *, 'icon_tet(i, :) = ', this%icon_tet(i, :)
-    end do
-    do i = 1, this%n_tet
-       print *, 'this%neigh_tet(i)%val = ', this%neigh_tet(i)%val 
-    end do
+    integer :: i, j, nelem
 
     print *, '=================================================='
     print *, 'The MPI rank of this chunck of the mesh is : ', this%mpi_rank
@@ -308,8 +237,161 @@ contains
          , ' is saved/retrieved is: ', this%fname
     print *, '=================================================='
 
+    ! number of elements
+    nelem = size(this%x)
+
+    print *, ' total number of elements in this homesh = ', nelem
+
+    do i = 1, nelem
+       print *, 'n_glob(', i, ') = ', this%n_glob(i)
+       print *, '---------------------------------------------------------------'
+       print *, 'list of points in element # ', i
+       print *, '---------------------------------------------------------------'
+       do j = 1, size(this%x(i)%val, 2)
+          print *, '(', this%x(i)%val(1, j), this%x(i)%val(2, j) &
+               , this%x(i)%val(3, j), ')'
+       end do
+       print *, 'adjacents to elem # ', i , ' are:'
+       print *, this%adj(i)%val
+       print *, 'elements near elem # ', i , ' are:'
+       print *, this%near(i)%val
+    end do
+
     ! done here
   end subroutine echo_homesh
+
+  ! convert a discontinuous format mesh object to a
+  ! continuous format usually used in CG FEM solvers
+  !
+  subroutine convert_discont_2_cont(this, tol_dg)
+    implicit none
+    class(homesh), intent(inout), target :: this
+    real*8, intent(in) :: tol_dg
+
+    ! local vars
+    integer :: i, j, tpt, MAX_NPE
+    logical :: found_flag
+    real*8, pointer :: tx(:, :) => null()
+
+    ! inits
+    this%tol_dg = tol_dg
+
+    ! compute the total number of points in the
+    ! current discontinuous homesh and max(npes)
+    this%npts_dg = 0
+    MAX_NPE = size(this%x(1)%val, 2)
+    do i = 1, size(this%x) !nelems
+       this%npts_dg = this%npts_dg + size(this%x(i)%val, 2)
+       if ( MAX_NPE < size(this%x(i)%val, 2) ) then
+          MAX_NPE = size(this%x(i)%val, 2)
+       end if
+    end do
+
+    !
+    if ( allocated(this%xyz) ) deallocate(this%xyz)
+    allocate( this%xyz(3, this%npts_dg) )
+
+    if ( allocated(this%icon) ) deallocate(this%icon)
+    allocate( this%icon( size(this%x) , MAX_NPE) )
+    this%icon = -1 ! nice initial value :)
+
+    ! _RESET
+    this%npts = 0
+
+    ! find unique points in all elements    
+    do i = 1, size(this%x)
+       tx => this%x(i)%val
+       do j = 1, size(tx, 2) 
+
+          found_flag = .false.
+          if ( this%is_pt_in_neigh(xpt = tx(:, j), elnum = i) ) then
+
+             tpt = this%loc_pt(xpt = tx(:, j), x = this%xyz, len = this%npts)
+
+             if ( tpt .ne. -1 ) then ! found; already in there somewhere ...
+                found_flag = .true.
+             end if
+
+          end if
+
+          if ( .not. found_flag ) then          
+             this%npts = this%npts + 1
+             this%xyz(:, this%npts) = tx(:, j)
+             tpt = this%npts
+          end if
+
+          this%icon(i, j) = tpt
+
+       end do
+
+    end do
+
+    ! done here
+  end subroutine convert_discont_2_cont
+
+  ! search for a given point <xpt> in a neighborhood
+  ! of a given element <elnum> (including all elements 
+  ! spatially near the given element) and if found
+  ! return .true. otherwise returns .false.
+  !
+  function is_pt_in_neigh(this, xpt, elnum)
+    implicit none
+    class(homesh), intent(in), target :: this
+    real*8, dimension(:), intent(in) :: xpt
+    integer, intent(in) :: elnum
+    logical :: is_pt_in_neigh
+
+    ! local vars
+    integer :: i, tpt
+    integer, pointer :: nears(:) => null()
+    real*8, pointer :: tx(:, :) => null()
+
+    nears => this%near(elnum)%val
+    is_pt_in_neigh = .false.
+
+    do i = 1, size(nears)
+       tx => this%x(nears(i))%val
+       tpt = this%loc_pt(xpt = xpt, x = tx , len = size(tx, 2))
+       if ( tpt .ne. -1 ) then
+          is_pt_in_neigh = .true.
+          exit
+       end if
+    end do
+
+    ! done here
+  end function is_pt_in_neigh
+
+  ! locates a point in a given array via distance (L2) norm;
+  ! if found within the given tolerance in this%tol_dg
+  ! then it returns the location of the point 
+  ! in the array; otherwise returns -1
+  function loc_pt(this, xpt, x, len)
+    implicit none
+    class(homesh), intent(in) :: this
+    real*8, dimension(:), intent(in) :: xpt
+    real*8, dimension(:, :), intent(in) :: x
+    integer, intent(in) :: len
+    integer :: loc_pt
+
+    ! local vars
+    integer :: i
+    real*8 :: dx(3), dist
+
+    loc_pt = -1
+
+    do i = 1, len
+       dx = x(:, i) - xpt
+       dist = sqrt(sum(dx*dx))
+       if ( dist > this%tol_dg ) then
+          cycle
+       else
+          loc_pt = i
+          return
+       end if
+    end do
+
+    ! done here
+  end function loc_pt
 
 end module mesh_io
 
@@ -321,7 +403,7 @@ program tester
   implicit none
 
   ! local vars
-  integer :: p_pri, d
+  integer :: i, p_pri, d
   type(homesh) :: thomesh
   real*8, allocatable :: x(:), y(:), z(:)
   real*8, allocatable :: x_pri(:, :), x_tet(:, :)
@@ -339,23 +421,25 @@ program tester
   x_tet(3, :) = z + 1.0d0
 
   ! init high-order mesh object ...
-  call thomesh%init(n_pri = 1, npe_pri = size(x_pri,2), n_tet = 1 &
-       , npe_tet = size(x_tet, 2), mpi_rank = 0)
+  call thomesh%init(mpi_rank = 0, nelem = 2)
 
-  ! init prism(s) 
-  thomesh%n_glob_pri(1) = 1
-  thomesh%x_pri(:, :, 1) = x_pri
-  thomesh%icon_pri(1, :) = (/ -1 , -1, -1, -1, 2 /)
-  allocate(thomesh%neigh_pri(1)%val(1))
-  thomesh%neigh_pri(1)%val(1) = 2
+  ! add prism(s) 
+  thomesh%n_glob(1) = 1
+  allocate(thomesh%x(1)%val(3, size(x_pri, 2)))
+  thomesh%x(1)%val = x_pri
+  allocate(thomesh%adj(1)%val(5))
+  thomesh%adj(1)%val = (/ -1 , -1, -1, -1, 2 /)
+  allocate(thomesh%near(1)%val(1))
+  thomesh%near(1)%val = (/ 2 /)
 
-  ! init tet(s)
-  thomesh%n_glob_tet(1) = 2
-  thomesh%x_tet(:, :, 1) = x_tet
-  thomesh%icon_tet(1, :) = (/ 1 , -1, -1, -1/)
-  allocate(thomesh%neigh_tet(1)%val(1))
-  thomesh%neigh_tet(1)%val(1) = 1
-
+  ! add tet(s)
+  thomesh%n_glob(2) = 2
+  allocate(thomesh%x(2)%val(3, size(x_tet, 2)))
+  thomesh%x(2)%val = x_tet
+  allocate(thomesh%adj(2)%val(4))
+  thomesh%adj(2)%val = (/ 1 , -1, -1, -1 /)
+  allocate(thomesh%near(2)%val(1))
+  thomesh%near(2)%val = (/ 1 /)
 
   ! write this mesh
   call thomesh%write()
@@ -370,14 +454,23 @@ program tester
   call thomesh%echo()
 
   ! export to tecplot
-  call export_tet_face_curve(x = thomesh%x_pri(1, :, 1) &
-       , y = thomesh%x_pri(2, :, 1), z = thomesh%x_pri(3, :, 1), mina = 20.0d0 &
-       , maxa = 155.0d0, fname = 'homesh.tec', meshnum = 1, append_it = .false.)
+  do i = 1, size(thomesh%x)
+     call export_tet_face_curve(x = thomesh%x(i)%val(1, :) &
+          , y = thomesh%x(i)%val(2, :), z = thomesh%x(i)%val(3, :), mina = 20.0d0 &
+          , maxa = 155.0d0, fname = 'homesh.tec', meshnum = i &
+          , append_it = (i .ne. 1))
+  end do
 
-  call export_tet_face_curve(x = thomesh%x_tet(1, :, 1) &
-       , y = thomesh%x_tet(2, :, 1), z = thomesh%x_tet(3, :, 1), mina = 20.0d0 &
-       , maxa = 155.0d0, fname = 'homesh.tec', meshnum = 2, append_it = .true.)
+  ! convert DG grid to CG grid
+  call thomesh%d2c(tol_dg = 1.0D-14)
 
+  print *, 'quickly show the CG mesh'
+  print *, '********************************************************'
+  do i = 1, thomesh%npts
+     print *, thomesh%xyz(1, i), thomesh%xyz(2, i), thomesh%xyz(3, i)
+  end do
+  print *, '********************************************************'
+ 
   ! finalize
   call thomesh%clean()
 
