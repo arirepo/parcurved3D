@@ -39,6 +39,7 @@ module tetmesher
   public :: read_facet_file, tetmesh
   public :: write_u_tecplot_tet
   public :: export_tet_face_curve
+  public :: find_master_elem_sub_tet_conn
 
 contains
 
@@ -558,6 +559,139 @@ contains
 
     ! done here
   end subroutine filter_bad_tets
+
+  ! given a master element (r,s,t), the following
+  ! subroutine finds the connectivity of sub-tetrahedralization
+  ! of that master element. We can use this connectivity
+  ! information for visualization purpose
+  ! when the master element is transformed to physical
+  ! space in the form of a highly curved/twisted element
+  ! 
+  !
+  subroutine find_master_elem_sub_tet_conn(rst, icon)
+    implicit none
+    real*8, dimension(:, :), intent(in) :: rst
+    integer, dimension(:, :), allocatable :: icon
+
+    ! local vars
+    integer :: i, npts, i1, i2, nhole
+    real*8, dimension(:), allocatable :: rst_tmp, xh
+    integer, dimension(:), allocatable :: icontag
+
+    ! tetmesher outs
+    real*8, dimension(:,:), allocatable :: xf
+    integer, dimension(:,:), allocatable :: neigh
+    integer :: nbntri
+    integer, dimension(:), allocatable :: bntri
+
+    ! permutation
+    integer :: ipt
+    integer, dimension(:), allocatable :: iperm
+
+    ! size the temporary <rst> buffer
+    !
+    npts = size(rst, 2)
+    allocate(rst_tmp(3 * npts))
+
+    ! now, fill it ...
+    do i = 1, npts
+       i1 = 3*(i-1) + 1
+       i2 = 3*i
+       rst_tmp(i1:i2) = rst(:, i)
+    end do
+
+    ! nullify the icontag array
+    allocate(icontag(0))
+
+    ! nullify holes since we dont have 
+    ! any holes in our elements
+    nhole = 0
+    allocate(xh(nhole))
+
+    ! generate the sub-tetrahedrons
+    call tetmesh(cmd = 'nQ', npts = npts, x = rst_tmp &
+         , nquad = 0, ntri = 0, icontag = icontag &
+         , nhole = nhole, xh = xh &
+         , xf = xf, tetcon = icon &
+         , neigh = neigh, nbntri = nbntri, bntri = bntri, bn_marker = 0)
+
+    ! bullet proofing
+    if ( size(xf, 2) .ne. size(rst, 2) ) then ! extra points are added then!!!
+       print *, 'Steiner points are added in find_master_prism_sub_tet_conn(...)!' &
+            , ' stop'
+       stop
+    end if
+
+    ! match the new <icon> and <xyz> exactly with the input <rst>
+    allocate(iperm(size(xf, 2)))
+
+    ! fill the permutation matrix
+    do i = 1, size(xf, 2)
+       ipt = find_pt( xpt = xf(:, i), x = rst)
+       if ( ipt .eq. -1) then
+          print *, 'could not find xyz #', i, ' in the original rst!' &
+               , ' tetmeshing resulted in missing original points! stop'
+          stop
+       end if
+       iperm(i) = ipt
+    end do
+    
+    ! apply the permutation to correct the connectivity
+    call replace_pt(array = icon, iperm = iperm)
+
+    ! cleanups
+    if ( allocated(rst_tmp) ) deallocate(rst_tmp)
+    if ( allocated(xh) ) deallocate(xh)
+    if ( allocated(icontag) ) deallocate(icontag)
+    if ( allocated(xf) ) deallocate(xf)
+    if ( allocated(neigh) ) deallocate(neigh)
+    if ( allocated(bntri) ) deallocate(bntri)
+    if ( allocated(iperm) ) deallocate(iperm)
+
+    ! done here
+  end subroutine find_master_elem_sub_tet_conn
+
+
+  function find_pt(xpt, x)
+    implicit none
+    real*8, dimension(:), intent(in) :: xpt
+    real*8, dimension(:, :), intent(in) :: x
+    integer :: find_pt
+
+    ! local vars
+    integer :: i
+
+    find_pt = -1
+
+    do i = 1, size(x, 2)
+       if (.not. all(x(:, i) .eq. xpt)) then
+          cycle
+       else
+          find_pt = i
+          return
+       end if
+    end do
+
+    ! done here
+  end function find_pt
+
+  !
+  subroutine replace_pt(array, iperm)
+    implicit none
+    integer, dimension(:,:), intent(inout) :: array
+    integer, dimension(:), intent(in) :: iperm
+
+    ! local vars
+    integer :: i, j
+
+    do i = 1, size(array, 1)
+       do j = 1, size(array, 2)
+             array(i,j) = iperm(array(i,j)) 
+       end do
+    end do
+
+    ! done here
+  end subroutine replace_pt
 
 end module tetmesher
 

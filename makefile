@@ -55,11 +55,11 @@ LIBS3 =  /home/aghasemi/metis-5.1.0/install_intel_cerberus/lib/
 # OMP_FLAG = -fopenmp
 OMP_FLAG =
 
-curved.run: $(TETGEN_LIB) tet_props.o var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_tet.o
-	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) tet_props.o var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_tet.f90 $(LFLAGS)
+curved.run: $(TETGEN_LIB) master_elem_distrib.o tet_props.o var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_tet.o
+	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) master_elem_distrib.o tet_props.o var_array.o timing.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_tet.f90 $(LFLAGS)
 
-vl.run: $(TETGEN_LIB) tet_props.o renka_trimesh_lib.o renka_trimesh.o gen_basis.o var_array.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o
-	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) tet_props.o renka_trimesh_lib.o renka_trimesh.o gen_basis.o var_array.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_prism.f90 $(LFLAGS)
+vl.run: $(TETGEN_LIB) master_elem_distrib.o tet_props.o renka_trimesh_lib.o renka_trimesh.o gen_basis.o var_array.o mesh_io.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o
+	$(F90) $(FCLFLAGS) -I$(INCS) -I$(INCS2) -L$(LIBS) -L$(LIBS2) -L$(LIBS3) master_elem_distrib.o tet_props.o renka_trimesh_lib.o renka_trimesh.o gen_basis.o var_array.o mesh_io.o ocas_hooks.o op_cascade.o lag_basis.o tetgen_wrapper.o prism_mesher.o tetmesher.o mpi_comm_mod.o curved_prism.f90 $(LFLAGS)
 
 clean:
 	rm -f *.o *.mod *.smod *.out *~ dumped* *.tec $(LIBS)libtet.a *.txt tmp.m opencascade_faces.m

@@ -395,197 +395,197 @@ contains
 
 end module mesh_io
 
-! a little tester program
-!
-program tester
-  use mesh_io
-  use tetmesher
-  implicit none
+! ! a little tester program
+! !
+! program tester
+!   use mesh_io
+!   use tetmesher
+!   implicit none
 
-  ! local vars
-  integer :: i, p_pri, d
-  type(homesh) :: thomesh
-  real*8, allocatable :: x(:), y(:), z(:)
-  real*8, allocatable :: x_pri(:, :), x_tet(:, :)
+!   ! local vars
+!   integer :: i, p_pri, d
+!   type(homesh) :: thomesh
+!   real*8, allocatable :: x(:), y(:), z(:)
+!   real*8, allocatable :: x_pri(:, :), x_tet(:, :)
 
-  ! generate a sample prism
-  p_pri = 8
-  call sample_prism_coords(p = p_pri, shift_x = (/0.0d0, 0.0d0, 0.0d0/) &
-       , x = x_pri)
-  ! generate a sample tet
-  d = p_pri
-  call coord_tet(d = d, x = x , y = y, z = z) 
-  allocate(x_tet(3, size(x)))
-  x_tet(1, :) = x
-  x_tet(2, :) = y
-  x_tet(3, :) = z + 1.0d0
+!   ! generate a sample prism
+!   p_pri = 8
+!   call sample_prism_coords(p = p_pri, shift_x = (/0.0d0, 0.0d0, 0.0d0/) &
+!        , x = x_pri)
+!   ! generate a sample tet
+!   d = p_pri
+!   call coord_tet(d = d, x = x , y = y, z = z) 
+!   allocate(x_tet(3, size(x)))
+!   x_tet(1, :) = x
+!   x_tet(2, :) = y
+!   x_tet(3, :) = z + 1.0d0
 
-  ! init high-order mesh object ...
-  call thomesh%init(mpi_rank = 0, nelem = 2)
+!   ! init high-order mesh object ...
+!   call thomesh%init(mpi_rank = 0, nelem = 2)
 
-  ! add prism(s) 
-  thomesh%n_glob(1) = 1
-  allocate(thomesh%x(1)%val(3, size(x_pri, 2)))
-  thomesh%x(1)%val = x_pri
-  allocate(thomesh%adj(1)%val(5))
-  thomesh%adj(1)%val = (/ -1 , -1, -1, -1, 2 /)
-  allocate(thomesh%near(1)%val(1))
-  thomesh%near(1)%val = (/ 2 /)
+!   ! add prism(s) 
+!   thomesh%n_glob(1) = 1
+!   allocate(thomesh%x(1)%val(3, size(x_pri, 2)))
+!   thomesh%x(1)%val = x_pri
+!   allocate(thomesh%adj(1)%val(5))
+!   thomesh%adj(1)%val = (/ -1 , -1, -1, -1, 2 /)
+!   allocate(thomesh%near(1)%val(1))
+!   thomesh%near(1)%val = (/ 2 /)
 
-  ! add tet(s)
-  thomesh%n_glob(2) = 2
-  allocate(thomesh%x(2)%val(3, size(x_tet, 2)))
-  thomesh%x(2)%val = x_tet
-  allocate(thomesh%adj(2)%val(4))
-  thomesh%adj(2)%val = (/ 1 , -1, -1, -1 /)
-  allocate(thomesh%near(2)%val(1))
-  thomesh%near(2)%val = (/ 1 /)
+!   ! add tet(s)
+!   thomesh%n_glob(2) = 2
+!   allocate(thomesh%x(2)%val(3, size(x_tet, 2)))
+!   thomesh%x(2)%val = x_tet
+!   allocate(thomesh%adj(2)%val(4))
+!   thomesh%adj(2)%val = (/ 1 , -1, -1, -1 /)
+!   allocate(thomesh%near(2)%val(1))
+!   thomesh%near(2)%val = (/ 1 /)
 
-  ! write this mesh
-  call thomesh%write()
+!   ! write this mesh
+!   call thomesh%write()
 
-  ! clean it for testing
-  call thomesh%clean()
+!   ! clean it for testing
+!   call thomesh%clean()
 
-  ! read it back again
-  call thomesh%read()
+!   ! read it back again
+!   call thomesh%read()
 
-  ! print on screen
-  call thomesh%echo()
+!   ! print on screen
+!   call thomesh%echo()
 
-  ! export to tecplot
-  do i = 1, size(thomesh%x)
-     call export_tet_face_curve(x = thomesh%x(i)%val(1, :) &
-          , y = thomesh%x(i)%val(2, :), z = thomesh%x(i)%val(3, :), mina = 20.0d0 &
-          , maxa = 155.0d0, fname = 'homesh.tec', meshnum = i &
-          , append_it = (i .ne. 1))
-  end do
+!   ! export to tecplot
+!   do i = 1, size(thomesh%x)
+!      call export_tet_face_curve(x = thomesh%x(i)%val(1, :) &
+!           , y = thomesh%x(i)%val(2, :), z = thomesh%x(i)%val(3, :), mina = 20.0d0 &
+!           , maxa = 155.0d0, fname = 'homesh.tec', meshnum = i &
+!           , append_it = (i .ne. 1))
+!   end do
 
-  ! convert DG grid to CG grid
-  call thomesh%d2c(tol_dg = 1.0D-14)
+!   ! convert DG grid to CG grid
+!   call thomesh%d2c(tol_dg = 1.0D-14)
 
-  print *, 'quickly show the CG mesh'
-  print *, '********************************************************'
-  do i = 1, thomesh%npts
-     print *, thomesh%xyz(1, i), thomesh%xyz(2, i), thomesh%xyz(3, i)
-  end do
-  print *, '********************************************************'
+!   print *, 'quickly show the CG mesh'
+!   print *, '********************************************************'
+!   do i = 1, thomesh%npts
+!      print *, thomesh%xyz(1, i), thomesh%xyz(2, i), thomesh%xyz(3, i)
+!   end do
+!   print *, '********************************************************'
  
-  ! finalize
-  call thomesh%clean()
+!   ! finalize
+!   call thomesh%clean()
 
-contains
+! contains
 
-  ! generates master elements coords of 
-  ! interpolation points (r,s) and
-  ! stores them in (x,y) 
-  subroutine coord_tri(d, x, y)
-    implicit none
-    integer, intent(in) :: d
-    real*8, dimension(:), allocatable :: x, y
+!   ! generates master elements coords of 
+!   ! interpolation points (r,s) and
+!   ! stores them in (x,y) 
+!   subroutine coord_tri(d, x, y)
+!     implicit none
+!     integer, intent(in) :: d
+!     real*8, dimension(:), allocatable :: x, y
 
-    ! local vars
-    integer :: npe, i, j, jj
-    real*8 :: dx, dy, xloc, yloc
+!     ! local vars
+!     integer :: npe, i, j, jj
+!     real*8 :: dx, dy, xloc, yloc
 
-    npe = (d+1) * (d+2) / 2
-    dx = 1.0d0 / dble(d)
-    dy = 1.0d0 / dble(d)
-    allocate(x(npe), y(npe))
-    x = 0.0d0; y = 0.0d0
+!     npe = (d+1) * (d+2) / 2
+!     dx = 1.0d0 / dble(d)
+!     dy = 1.0d0 / dble(d)
+!     allocate(x(npe), y(npe))
+!     x = 0.0d0; y = 0.0d0
 
-    jj = 1
-    xloc = 1.0d0 
-    do i = 0, d
-       yloc = 0.0d0
-       do j = 0, i
-          x(jj) = xloc
-          y(jj) = yloc
-          yloc = yloc + dy 
-          jj = jj + 1
-       end do
-       xloc = xloc - dx
-    end do
+!     jj = 1
+!     xloc = 1.0d0 
+!     do i = 0, d
+!        yloc = 0.0d0
+!        do j = 0, i
+!           x(jj) = xloc
+!           y(jj) = yloc
+!           yloc = yloc + dy 
+!           jj = jj + 1
+!        end do
+!        xloc = xloc - dx
+!     end do
 
-    ! done here
-  end subroutine coord_tri
+!     ! done here
+!   end subroutine coord_tri
 
-  subroutine coord_tet(d, x, y, z)
-    implicit none
-    integer, intent(in) :: d
-    real*8, dimension(:), allocatable :: x, y, z
+!   subroutine coord_tet(d, x, y, z)
+!     implicit none
+!     integer, intent(in) :: d
+!     real*8, dimension(:), allocatable :: x, y, z
 
-    ! local vars
-    integer :: npe, i, j, k, jj
-    real*8 :: dx, dy, dz, xloc, yloc, zloc
+!     ! local vars
+!     integer :: npe, i, j, k, jj
+!     real*8 :: dx, dy, dz, xloc, yloc, zloc
 
-    npe = (d+1) * (d+2) * (d+3) / 6
-    dx = 1.0d0 / dble(d)
-    dy = 1.0d0 / dble(d)
-    dz = 1.0d0 / dble(d)
+!     npe = (d+1) * (d+2) * (d+3) / 6
+!     dx = 1.0d0 / dble(d)
+!     dy = 1.0d0 / dble(d)
+!     dz = 1.0d0 / dble(d)
 
-    allocate(x(npe), y(npe), z(npe))
-    x = 0.0d0; y = 0.0d0; z = 0.0d0
-    jj = 1
-    xloc = 1.0d0 
-    do i = 0, d
-       yloc = 1.0d0 - xloc
-       do j = 0, i
-          zloc = 1.0d0 - xloc - yloc
-          do k = 0, j
-             x(jj) = xloc
-             y(jj) = yloc
-             z(jj) = zloc
-             zloc = zloc - dz
-             jj = jj + 1
-          end do
-          yloc = yloc - dy
-       end do
-       xloc = xloc - dx
-    end do
+!     allocate(x(npe), y(npe), z(npe))
+!     x = 0.0d0; y = 0.0d0; z = 0.0d0
+!     jj = 1
+!     xloc = 1.0d0 
+!     do i = 0, d
+!        yloc = 1.0d0 - xloc
+!        do j = 0, i
+!           zloc = 1.0d0 - xloc - yloc
+!           do k = 0, j
+!              x(jj) = xloc
+!              y(jj) = yloc
+!              z(jj) = zloc
+!              zloc = zloc - dz
+!              jj = jj + 1
+!           end do
+!           yloc = yloc - dy
+!        end do
+!        xloc = xloc - dx
+!     end do
 
-    ! done here
-  end subroutine coord_tet
+!     ! done here
+!   end subroutine coord_tet
 
-  ! generates a sample pth-order prism
-  ! for testing mesh_io class
-  subroutine sample_prism_coords(p, shift_x, x)
-    implicit none
-    integer, intent(in) :: p
-    real*8, dimension(:), intent(in) :: shift_x
-    real*8, dimension(:,:), allocatable :: x
+!   ! generates a sample pth-order prism
+!   ! for testing mesh_io class
+!   subroutine sample_prism_coords(p, shift_x, x)
+!     implicit none
+!     integer, intent(in) :: p
+!     real*8, dimension(:), intent(in) :: shift_x
+!     real*8, dimension(:,:), allocatable :: x
 
-    ! local vars
-    integer :: nz, i, npe, k, jj
-    real*8, dimension(:), allocatable :: x0, y0
-    real*8, dimension((p + 1)) :: z0
+!     ! local vars
+!     integer :: nz, i, npe, k, jj
+!     real*8, dimension(:), allocatable :: x0, y0
+!     real*8, dimension((p + 1)) :: z0
 
-    ! points in the z-directions
-    nz = p + 1
+!     ! points in the z-directions
+!     nz = p + 1
 
-    ! generate bottom triangle equally spaced point dirstibution
-    call coord_tri(d = p, x = x0, y = y0)
-    z0 = (/ ( (dble(i-1) / dble(nz-1)), i = 1, nz ) /)
+!     ! generate bottom triangle equally spaced point dirstibution
+!     call coord_tri(d = p, x = x0, y = y0)
+!     z0 = (/ ( (dble(i-1) / dble(nz-1)), i = 1, nz ) /)
 
-    npe = nz * size(x0)
-    allocate(x(3, npe))
+!     npe = nz * size(x0)
+!     allocate(x(3, npe))
 
-    jj = 1
-    do i = 1, size(x0)
-       do k = 1, nz
-          x(1, jj) = x0(i) + shift_x(1)
-          x(2, jj) = y0(i) + shift_x(2)
-          x(3, jj) = z0(k) + shift_x(3)
-          jj = jj + 1
-       end do
-    end do
+!     jj = 1
+!     do i = 1, size(x0)
+!        do k = 1, nz
+!           x(1, jj) = x0(i) + shift_x(1)
+!           x(2, jj) = y0(i) + shift_x(2)
+!           x(3, jj) = z0(k) + shift_x(3)
+!           jj = jj + 1
+!        end do
+!     end do
 
-    ! clean ups
-    if ( allocated(x0) ) deallocate(x0)
-    if ( allocated(y0) ) deallocate(y0)
+!     ! clean ups
+!     if ( allocated(x0) ) deallocate(x0)
+!     if ( allocated(y0) ) deallocate(y0)
 
-    ! done here
-  end subroutine sample_prism_coords
+!     ! done here
+!   end subroutine sample_prism_coords
 
-  ! done here
-end program tester
+!   ! done here
+! end program tester

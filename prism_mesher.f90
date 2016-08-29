@@ -26,7 +26,7 @@ module prism_mesher
   end type vl_info
 
   public :: comp_bn_tri_normal, find_node2icontag, extrude_bn_tris
-  public :: vl_info, coord_tri, map_master_tri_to_phys
+  public :: vl_info, map_master_tri_to_phys
   public :: detect_prism_tris
 
 contains
@@ -258,40 +258,6 @@ contains
 
     ! done here
   end subroutine extrude_bn_tris
-
-  ! generates master elements coords of 
-  ! interpolation points (r,s) and
-  ! stores them in (x,y) 
-  subroutine coord_tri(d, x, y)
-    implicit none
-    integer, intent(in) :: d
-    real*8, dimension(:), allocatable :: x, y
-
-    ! local vars
-    integer :: npe, i, j, jj
-    real*8 :: dx, dy, xloc, yloc
-
-    npe = (d+1) * (d+2) / 2
-    dx = 1.0d0 / dble(d)
-    dy = 1.0d0 / dble(d)
-    allocate(x(npe), y(npe))
-    x = 0.0d0; y = 0.0d0
-
-    jj = 1
-    xloc = 1.0d0 
-    do i = 0, d
-       yloc = 0.0d0
-       do j = 0, i
-          x(jj) = xloc
-          y(jj) = yloc
-          yloc = yloc + dy 
-          jj = jj + 1
-       end do
-       xloc = xloc - dx
-    end do
-
-    ! done here
-  end subroutine coord_tri
 
   ! maps the master-elem point-distibution of a triangle
   ! given by (r,s) (for an arbitrary order interpolation)

@@ -6,6 +6,7 @@ module curved_tet
   use op_cascade
   use mpi_comm_mod
   use timing
+  use master_elem_distrib
   implicit none
 
   private
@@ -14,7 +15,7 @@ module curved_tet
   logical :: LOAD_BALANCE_BASED_ON_BOUNDARY = .true.
 
 
-  public :: coord_tet, master2curved_tet
+  public :: master2curved_tet
   public :: master2curved_edg_tet
   public :: curved_tetgen_geom
 
@@ -22,43 +23,6 @@ module curved_tet
   public :: tester1
 
 contains
-
-  subroutine coord_tet(d, x, y, z)
-    implicit none
-    integer, intent(in) :: d
-    real*8, dimension(:), allocatable :: x, y, z
-
-    ! local vars
-    integer :: npe, i, j, k, jj
-    real*8 :: dx, dy, dz, xloc, yloc, zloc
-
-    npe = (d+1) * (d+2) * (d+3) / 6
-    dx = 1.0d0 / dble(d)
-    dy = 1.0d0 / dble(d)
-    dz = 1.0d0 / dble(d)
-
-    allocate(x(npe), y(npe), z(npe))
-    x = 0.0d0; y = 0.0d0; z = 0.0d0
-    jj = 1
-    xloc = 1.0d0 
-    do i = 0, d
-       yloc = 1.0d0 - xloc
-       do j = 0, i
-          zloc = 1.0d0 - xloc - yloc
-          do k = 0, j
-             x(jj) = xloc
-             y(jj) = yloc
-             z(jj) = zloc
-             zloc = zloc - dz
-             jj = jj + 1
-          end do
-          yloc = yloc - dy
-       end do
-       xloc = xloc - dx
-    end do
-
-    ! done here
-  end subroutine coord_tet
 
   subroutine Suv(u, v, S)
     implicit none

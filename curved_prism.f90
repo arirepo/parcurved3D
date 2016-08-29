@@ -6,7 +6,9 @@ module curved_prism
   use gen_basis
   use op_cascade
   use renka_trimesh
-
+  use lag_basis
+  use mesh_io
+  use master_elem_distrib
   implicit none
 
   private
@@ -38,7 +40,9 @@ module curved_prism
      procedure, public :: init => init_brep_interp
      procedure         :: vis_icon => find_bn_tris_icon
      procedure         :: write_bn_tris_tecplot
-     procedure         :: rs2xyz => brep_interp_rs2xyz
+     procedure         :: rs2xyz_bot => brep_interp_rs2xyz
+     procedure, public :: rs2xyz_top => top_interp_rs2xyz
+     procedure, public :: gen_prism
 
   end type brep_interp
 
@@ -75,7 +79,7 @@ contains
     integer :: ttri, tnode
     real*8 :: xv_brep(3, 3), xv_top(3, 3)
 
-    ! mesh outs
+    ! linear mesh outs
     real*8, dimension(:, :), allocatable :: xf
     integer, dimension(:, :), allocatable :: tetcon, neigh
     integer :: nbntri
@@ -84,6 +88,11 @@ contains
 
     ! prism layer vars
     real*8 :: nu = 0.2d0
+
+    ! high-order mesh vars
+    type(homesh) :: thomesh
+    real*8, dimension(:, :), allocatable :: rst_prism
+    integer, dimension(:, :), allocatable :: icon_master_prism
 
     if ( tmpi%rank .eq. tmpi%root_rank ) then
 
@@ -141,6 +150,49 @@ contains
     call write_u_tecplot_tet(meshnum=1, outfile='linear_tets.tec', x = xf &
          , icon = tetcon, u = uu, appendit = .false.)
     if ( allocated(uu) ) deallocate(uu)
+
+
+    ! get the master element point distribution
+    ! for the prismatic element of the given order
+    !
+    call sample_prism_coords(p = 4, shift_x = (/ 0.0d0, 0.0d0, 0.0d0/) &
+         , x = rst_prism)
+    call find_master_elem_sub_tet_conn(rst = rst_prism, icon = icon_master_prism)
+
+    ! init high-order mesh object ...
+    call thomesh%init(mpi_rank = 0, nelem = 1)
+
+    call tbrep(1)%gen_prism(rst = rst_prism, x = thomesh%x(1)%val)
+    thomesh%n_glob(1) = 1
+    allocate(thomesh%adj(1)%val(1))
+    thomesh%adj(1)%val = 1
+    allocate(thomesh%near(1)%val(1))
+    thomesh%near(1)%val = 1
+
+    ! write this mesh
+    call thomesh%write()
+
+    ! export to tecplot
+    do ii = 1, size(thomesh%x)
+
+       allocate(uu(1, size(thomesh%x(ii)%val,2)))
+       uu = 1.0d0
+       call write_u_tecplot_tet(meshnum = ii, outfile = 'homesh2.tec' &
+            , x = thomesh%x(ii)%val, icon = icon_master_prism &
+            , u = uu, appendit = (ii .ne. 1))
+       if ( allocated(uu) ) deallocate(uu)
+
+       ! call export_tet_face_curve(x = thomesh%x(ii)%val(1, :) &
+       !      , y = thomesh%x(ii)%val(2, :), z = thomesh%x(ii)%val(3, :) &
+       !      , mina = 20.0d0 &
+       !      , maxa = 155.0d0, fname = 'homesh.tec', meshnum = ii &
+       !      , append_it = (ii .ne. 1))
+    end do
+    
+ 
+    ! clean it for testing
+    call thomesh%clean()
+
 
     end if
 
@@ -227,7 +279,7 @@ contains
 
     do i = 1, size(rtmp)
 
-       call this%rs2xyz(r = rtmp(i), s = stmp(i) &
+       call this%rs2xyz_bot(r = rtmp(i), s = stmp(i) &
             , x = this%x_vis(1, i), y = this%x_vis(2, i), z = this%x_vis(3, i))
     end do
 
@@ -286,6 +338,68 @@ contains
     ! done here
   end subroutine brep_interp_rs2xyz
 
+  ! projects a given local (r,s) to the 
+  ! physical space using the P1 interpolant
+  ! obtained from the top face of the boundary
+  ! prismatic frame that contains all sub-prisms
+  !
+  subroutine top_interp_rs2xyz(this, r, s, x, y, z)
+    implicit none
+    class(brep_interp), intent(inout) :: this
+    real*8, intent(in) :: r, s
+    real*8, intent(out) :: x, y, z
+
+    ! local vars
+    integer :: i
+    real*8, dimension(3) :: xyz
+    real*8 :: val   ! the value of basis  
+    real*8, dimension(2) :: der   ! the (d/dr,d/ds) of basis
+
+    ! compute xyz
+    xyz = 0.0d0
+    do i = 1, 3
+       call psi(etype = 1, i = i, r = r, s = s, val = val, der = der)
+       xyz = xyz + val * this%xv_top(:, i)
+    end do
+
+    x = xyz(1)
+    y = xyz(2)
+    z = xyz(3)
+
+    ! done here
+  end subroutine top_interp_rs2xyz
+
+  ! generates a curved boundary conforming prism
+  ! 
+  subroutine gen_prism(this, rst, x)
+    implicit none
+    class(brep_interp), intent(inout) :: this
+    real*8, dimension(:, :), intent(in) :: rst
+    real*8, dimension(:, :), allocatable :: x
+
+    ! local vars
+    integer :: i
+    real*8 :: r, s, t, xb(3), xt(3)
+
+    if ( allocated(x) ) deallocate(x)
+    allocate( x(size(rst,1) , size(rst,2)) )
+
+    do i = 1, size(rst, 2)
+
+       r = rst(1, i)
+       s = rst(2, i)
+       t = rst(3, i)
+
+       call this%rs2xyz_bot(r = r, s = s, x = xb(1), y = xb(2), z = xb(3))
+       call this%rs2xyz_top(r = r, s = s, x = xt(1), y = xt(2), z = xt(3))
+
+       x(:, i) = t * xt + (1.0d0 - t) * xb
+
+    end do
+
+    ! done here
+  end subroutine gen_prism
+
 end module curved_prism
 
 program tester
@@ -313,7 +427,7 @@ program tester
   tvl_info%nu = 0.3d0
   ! order of boundary representation via polynomials
   tvl_info%p_brep = 4
-  tvl_info%enable_bn_tris_vis = .true.
+  tvl_info%enable_bn_tris_vis = .false.
 
   call curved_prism_geom(tetgen_cmd = 'pq1.414nnY' &
        , facet_file = 'sphere_orient.facet' &
