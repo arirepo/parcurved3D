@@ -6,6 +6,7 @@ module tetmesher
 
     ! local constants (change them for bigger meshes)
     integer, parameter :: max_node = 1000000, max_tet = 1000000, max_triface = 200000
+    real*8, parameter :: TOL_SUB_TET = 1.0d-14
 
   interface
      subroutine tetmesh_intf(command, npts, x, nquad &
@@ -574,7 +575,7 @@ contains
     integer, dimension(:, :), allocatable :: icon
 
     ! local vars
-    integer :: i, npts, i1, i2, nhole
+    integer :: i, npts, i1, i2, nhole, j
     real*8, dimension(:), allocatable :: rst_tmp, xh
     integer, dimension(:), allocatable :: icontag
 
@@ -585,8 +586,10 @@ contains
     integer, dimension(:), allocatable :: bntri
 
     ! permutation
-    integer :: ipt
+    integer :: ipt, nsub
     integer, dimension(:), allocatable :: iperm
+    real*8 :: tetra(3, 4), volume
+    integer, dimension(:, :), allocatable :: icon_tmp
 
     ! size the temporary <rst> buffer
     !
@@ -612,7 +615,7 @@ contains
     call tetmesh(cmd = 'nQ', npts = npts, x = rst_tmp &
          , nquad = 0, ntri = 0, icontag = icontag &
          , nhole = nhole, xh = xh &
-         , xf = xf, tetcon = icon &
+         , xf = xf, tetcon = icon_tmp &
          , neigh = neigh, nbntri = nbntri, bntri = bntri, bn_marker = 0)
 
     ! bullet proofing
@@ -637,7 +640,41 @@ contains
     end do
     
     ! apply the permutation to correct the connectivity
-    call replace_pt(array = icon, iperm = iperm)
+    call replace_pt(array = icon_tmp, iperm = iperm)
+
+    ! further double check icon_tmp to see zero/negative volume
+    ! does not exist at all!
+    nsub = 0
+    do i = 1, size(icon_tmp, 1)
+       do j = 1, 4
+          tetra(:, j) = rst(:, icon_tmp(i, j))
+       end do
+       call tetrahedron_volume ( tetra = tetra, volume = volume)
+       if ( volume .le. TOL_SUB_TET) then
+          cycle
+       else
+          nsub = nsub + 1
+       end if
+    end do
+
+    ! finally, size the final connectivity matrix
+    if ( allocated(icon) ) deallocate(icon)
+    allocate( icon(nsub, 4) )
+    ! and fill it
+    nsub = 0
+    do i = 1, size(icon_tmp, 1)
+       do j = 1, 4
+          tetra(:, j) = rst(:, icon_tmp(i, j))
+       end do
+       call tetrahedron_volume ( tetra = tetra, volume = volume)
+       if ( volume .le. TOL_SUB_TET) then
+          cycle
+       else
+          nsub = nsub + 1
+          icon(nsub, :) = icon_tmp(i, :)
+       end if
+    end do
+
 
     ! cleanups
     if ( allocated(rst_tmp) ) deallocate(rst_tmp)
@@ -647,6 +684,7 @@ contains
     if ( allocated(neigh) ) deallocate(neigh)
     if ( allocated(bntri) ) deallocate(bntri)
     if ( allocated(iperm) ) deallocate(iperm)
+    if ( allocated(icon_tmp) ) deallocate(icon_tmp)
 
     ! done here
   end subroutine find_master_elem_sub_tet_conn

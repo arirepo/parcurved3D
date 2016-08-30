@@ -90,6 +90,7 @@ contains
     real*8 :: nu = 0.2d0
 
     ! high-order mesh vars
+    integer :: n_homesh
     type(homesh) :: thomesh
     real*8, dimension(:, :), allocatable :: rst_prism
     integer, dimension(:, :), allocatable :: icon_master_prism
@@ -131,7 +132,7 @@ contains
           xv_brep(:, jj) = x(i1:i2)
           xv_top(:, jj) = x2(i1:i2)
        end do
-       ! print *, ii
+       print *, ii
        call tbrep(ii)%init(tri_num = ttri, p = tvl_info%p_brep, xv = xv_brep &
             , xv_top = xv_top, tol = tol, enab = tvl_info%enable_bn_tris_vis)
     end do
@@ -155,19 +156,23 @@ contains
     ! get the master element point distribution
     ! for the prismatic element of the given order
     !
-    call sample_prism_coords(p = 4, shift_x = (/ 0.0d0, 0.0d0, 0.0d0/) &
+    call sample_prism_coords(p = 1, shift_x = (/ 0.0d0, 0.0d0, 0.0d0/) &
          , x = rst_prism)
     call find_master_elem_sub_tet_conn(rst = rst_prism, icon = icon_master_prism)
 
     ! init high-order mesh object ...
-    call thomesh%init(mpi_rank = 0, nelem = 1)
+    n_homesh = size(prism_tris) ! + number of generated tets
+    call thomesh%init(mpi_rank = 0, nelem = n_homesh)
 
-    call tbrep(1)%gen_prism(rst = rst_prism, x = thomesh%x(1)%val)
-    thomesh%n_glob(1) = 1
-    allocate(thomesh%adj(1)%val(1))
-    thomesh%adj(1)%val = 1
-    allocate(thomesh%near(1)%val(1))
-    thomesh%near(1)%val = 1
+    ! fill the high-order prisms ...
+    do ii = 1, size(prism_tris)
+       call tbrep(ii)%gen_prism(rst = rst_prism, x = thomesh%x(ii)%val)
+       thomesh%n_glob(ii) = ii ! will change when MPI modif. will be added
+       allocate(thomesh%adj(ii)%val(1))
+       thomesh%adj(ii)%val = ii
+       allocate(thomesh%near(ii)%val(1))
+       thomesh%near(ii)%val = ii
+    end do
 
     ! write this mesh
     call thomesh%write()
@@ -419,33 +424,35 @@ program tester
   call tmpi%init()
 
 
-  nhole = 1
-  allocate(xh(3))
-  xh = 0.0d0
-  allocate(tvl_info%tags(4))
-  tvl_info%tags = (/ 1,2,3,4/)
-  tvl_info%nu = 0.3d0
-  ! order of boundary representation via polynomials
-  tvl_info%p_brep = 4
-  tvl_info%enable_bn_tris_vis = .false.
-
-  call curved_prism_geom(tetgen_cmd = 'pq1.414nnY' &
-       , facet_file = 'sphere_orient.facet' &
-       , cad_file = 'sphere2.iges', nhole = nhole &
-       , xh = xh, tol = .03d0, tmpi = tmpi, tvl_info = tvl_info)
-
   ! nhole = 1
   ! allocate(xh(3))
-  ! xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
-  ! allocate(tvl_info%tags(40))
-  ! tvl_info%tags = (/ (ii, ii = 1, 40) /)
-
+  ! xh = 0.0d0
+  ! allocate(tvl_info%tags(4))
+  ! tvl_info%tags = (/ 1,2,3,4/)
   ! tvl_info%nu = 0.3d0
+  ! ! order of boundary representation via polynomials
+  ! tvl_info%p_brep = 4
+  ! tvl_info%enable_bn_tris_vis = .false.
 
-  ! call curved_prism_geom(tetgen_cmd = 'pq1.214nnY' &
-  !      , facet_file = 'civil3_orient.facet' &
-  !      , cad_file = 'civil3.iges', nhole = nhole &
-  !      , xh = xh, tol = 20.0d0, tmpi = tmpi, tvl_info = tvl_info)
+  ! call curved_prism_geom(tetgen_cmd = 'pq1.414nnY' &
+  !      , facet_file = 'sphere_orient.facet' &
+  !      , cad_file = 'sphere2.iges', nhole = nhole &
+  !      , xh = xh, tol = .03d0, tmpi = tmpi, tvl_info = tvl_info)
+
+  nhole = 1
+  allocate(xh(3))
+  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+  allocate(tvl_info%tags(28))
+  tvl_info%tags = (/ (ii, ii = 1, 28) /)
+
+  tvl_info%nu = 0.3d0
+  tvl_info%p_brep = 1
+  tvl_info%enable_bn_tris_vis = .false.
+
+  call curved_prism_geom(tetgen_cmd = 'pq1.214nnY' &
+       , facet_file = 'civil3_orient2.facet' &
+       , cad_file = 'civil3.iges', nhole = nhole &
+       , xh = xh, tol = 20.0d0, tmpi = tmpi, tvl_info = tvl_info)
 
 
 

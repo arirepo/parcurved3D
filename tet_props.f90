@@ -5,6 +5,7 @@ module tet_props
 
 
   public :: tetrahedron_dihedral_angles, tetrahedron_edge_length
+  public :: tetrahedron_volume
 
 contains
 
