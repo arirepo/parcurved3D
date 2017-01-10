@@ -424,35 +424,35 @@ program tester
   call tmpi%init()
 
 
-  ! nhole = 1
-  ! allocate(xh(3))
-  ! xh = 0.0d0
-  ! allocate(tvl_info%tags(4))
-  ! tvl_info%tags = (/ 1,2,3,4/)
-  ! tvl_info%nu = 0.3d0
-  ! ! order of boundary representation via polynomials
-  ! tvl_info%p_brep = 4
-  ! tvl_info%enable_bn_tris_vis = .false.
-
-  ! call curved_prism_geom(tetgen_cmd = 'pq1.414nnY' &
-  !      , facet_file = 'sphere_orient.facet' &
-  !      , cad_file = 'sphere2.iges', nhole = nhole &
-  !      , xh = xh, tol = .03d0, tmpi = tmpi, tvl_info = tvl_info)
-
   nhole = 1
   allocate(xh(3))
-  xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
-  allocate(tvl_info%tags(28))
-  tvl_info%tags = (/ (ii, ii = 1, 28) /)
-
+  xh = 0.0d0
+  allocate(tvl_info%tags(4))
+  tvl_info%tags = (/ 1,2,3,4/)
   tvl_info%nu = 0.3d0
-  tvl_info%p_brep = 1
+  ! order of boundary representation via polynomials
+  tvl_info%p_brep = 4
   tvl_info%enable_bn_tris_vis = .false.
 
-  call curved_prism_geom(tetgen_cmd = 'pq1.214nnY' &
-       , facet_file = 'civil3_orient2.facet' &
-       , cad_file = 'civil3.iges', nhole = nhole &
-       , xh = xh, tol = 20.0d0, tmpi = tmpi, tvl_info = tvl_info)
+  call curved_prism_geom(tetgen_cmd = 'pq1.414nnY' &
+       , facet_file = 'sphere_orient.facet' &
+       , cad_file = 'sphere2.iges', nhole = nhole &
+       , xh = xh, tol = .03d0, tmpi = tmpi, tvl_info = tvl_info)
+
+  ! nhole = 1
+  ! allocate(xh(3))
+  ! xh = (/ 10.0d0, 0.0d0, 0.0d0 /)
+  ! allocate(tvl_info%tags(28))
+  ! tvl_info%tags = (/ (ii, ii = 1, 28) /)
+
+  ! tvl_info%nu = 0.3d0
+  ! tvl_info%p_brep = 1
+  ! tvl_info%enable_bn_tris_vis = .false.
+
+  ! call curved_prism_geom(tetgen_cmd = 'pq1.214nnY' &
+  !      , facet_file = 'civil3_orient2.facet' &
+  !      , cad_file = 'civil3.iges', nhole = nhole &
+  !      , xh = xh, tol = 20.0d0, tmpi = tmpi, tvl_info = tvl_info)
 
 
 
