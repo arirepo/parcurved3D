@@ -42,18 +42,18 @@ TETGEN_LIB = $(LIBS)libtet.a
 
 # LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/lin64/gcc/lib/
 #LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/tmp_o_same_gcc/
-#LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/tmp_o_rivermont/
-LIBS2 = /home/ari/Downloads/opencascade-7.1.0/final_lib/
+LIBS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/tmp_o_rivermont/
+# LIBS2 = /home/ari/Downloads/opencascade-7.1.0/final_lib/
 
 # INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.0/install/inc/
-#INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/install_rivermont/inc/
-INCS2 = /home/ari/Downloads/opencascade-7.1.0/install_dir/include/opencascade/
+INCS2 =  /home/aghasemi/Desktop/fortran_opencascade_wrapper/opencascade-6.9.1/install_rivermont/inc/
+# INCS2 = /home/ari/Downloads/opencascade-7.1.0/install_dir/include/opencascade/
 
 # LIBS3 =  /home/aghasemi/metis-5.1.0/install_SUSE_13.1_64/lib/
 # LIBS3 =  /home/aghasemi/metis-5.1.0/install_cerberus/lib/
 # LIBS3 =  /home/aghasemi/metis-5.1.0/install_ibm_blue/lib/
-#LIBS3 =  /home/aghasemi/metis-5.1.0/install_intel_cerberus/lib/
-LIBS3 =  /home/ari/Downloads/metis-5.1.0/install_dir/lib/
+LIBS3 =  /home/aghasemi/metis-5.1.0/install_intel_cerberus/lib/
+# LIBS3 =  /home/ari/Downloads/metis-5.1.0/install_dir/lib/
 
 # OMP_FLAG = -fopenmp
 OMP_FLAG =

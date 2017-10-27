@@ -23,6 +23,9 @@ module prism_mesher
      ! very useful for fancy highly curved boundary visualization 
      logical :: enable_bn_tris_vis = .false.
 
+     ! number of layers
+     integer :: nv
+
   end type vl_info
 
   public :: comp_bn_tri_normal, find_node2icontag, extrude_bn_tris

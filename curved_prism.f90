@@ -95,6 +95,10 @@ contains
     real*8, dimension(:, :), allocatable :: rst_prism
     integer, dimension(:, :), allocatable :: icon_master_prism
 
+    ! viscous layer stretching
+    integer :: indx
+    real*8, allocatable :: wall(:)
+
     if ( tmpi%rank .eq. tmpi%root_rank ) then
 
     ! init CAD file
@@ -160,18 +164,29 @@ contains
          , x = rst_prism)
     call find_master_elem_sub_tet_conn(rst = rst_prism, icon = icon_master_prism)
 
+    ! compute the viscous layer stretching
+    allocate(wall(tvl_info%nv))
+    wall = (/ ((ii - 1.0d0)/(tvl_info%nv-1.0d0) , ii = 1, tvl_info%nv) /)
+    wall = wall**2
+    indx = 1
+
     ! init high-order mesh object ...
-    n_homesh = size(prism_tris) ! + number of generated tets
+    n_homesh = size(prism_tris) * (size(wall)-1) ! + number of generated tets
     call thomesh%init(mpi_rank = 0, nelem = n_homesh)
+
 
     ! fill the high-order prisms ...
     do ii = 1, size(prism_tris)
-       call tbrep(ii)%gen_prism(rst = rst_prism, x = thomesh%x(ii)%val)
-       thomesh%n_glob(ii) = ii ! will change when MPI modif. will be added
-       allocate(thomesh%adj(ii)%val(1))
-       thomesh%adj(ii)%val = ii
-       allocate(thomesh%near(ii)%val(1))
-       thomesh%near(ii)%val = ii
+       do jj = 1, (size(wall)-1)
+          call tbrep(ii)%gen_prism(rst = rst_prism, tb=wall(jj) &
+               , tt=wall(jj+1), x = thomesh%x(indx)%val)
+          thomesh%n_glob(indx) = indx ! will change when MPI modif. will be added
+          allocate(thomesh%adj(indx)%val(1))
+          thomesh%adj(indx)%val = indx
+          allocate(thomesh%near(indx)%val(1))
+          thomesh%near(indx)%val = indx
+          indx = indx + 1
+       end do
     end do
 
     ! write this mesh
@@ -376,10 +391,11 @@ contains
 
   ! generates a curved boundary conforming prism
   ! 
-  subroutine gen_prism(this, rst, x)
+  subroutine gen_prism(this, rst, tb, tt, x)
     implicit none
     class(brep_interp), intent(inout) :: this
     real*8, dimension(:, :), intent(in) :: rst
+    real*8, intent(in) :: tb, tt
     real*8, dimension(:, :), allocatable :: x
 
     ! local vars
@@ -397,6 +413,8 @@ contains
 
        call this%rs2xyz_bot(r = r, s = s, x = xb(1), y = xb(2), z = xb(3))
        call this%rs2xyz_top(r = r, s = s, x = xt(1), y = xt(2), z = xt(3))
+       ! map the t value to form a slice
+       t = t*tt + (1.0d0 - t) * tb
 
        x(:, i) = t * xt + (1.0d0 - t) * xb
 
@@ -433,6 +451,7 @@ program tester
   ! order of boundary representation via polynomials
   tvl_info%p_brep = 4
   tvl_info%enable_bn_tris_vis = .false.
+  tvl_info%nv = 10
 
   call curved_prism_geom(tetgen_cmd = 'pq1.414nnY' &
        , facet_file = 'sphere_orient.facet' &
